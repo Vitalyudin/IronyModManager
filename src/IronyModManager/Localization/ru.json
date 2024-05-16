@@ -136,7 +136,7 @@
         "Delete_Title": "Удалить коллекцию?",
         "Delete_Header": "Подтвердите удаление коллекции",
         "Delete_Message": "Вы уверены, что хотите удалить коллекцию {CollectionName}?",
-        "Deleting_Message": "Пожалуйста, подождите во время удаления коллекции модов...",
+        "Deleting_Message": "Коллекция модов удаляется...",
         "Export": "Экспорт",
         "Import": "Импорт",
         "Export_Dialog_Title": "Экспортировать коллекцию",
@@ -203,8 +203,8 @@
         },
         "ExportOther": {
             "Title": "...",
-            "OrderOnly": "Экспортировать только порядок",
-            "WholeCollection": "Экспортировать целую коллекцию",
+            "OrderOnly": "Экспортировать только порядок модов",
+            "WholeCollection": "Экспортировать всю коллекцию",
             "ParadoxLauncherJson": "Экспорт в Paradox Launcher Json (<2021.10)",
             "ParadoxLauncherJson202110": "Экспорт в Paradox Launcher Json (>=2021.10)",
             "Close": "Закрыть"
@@ -251,7 +251,7 @@
             }
         },
         "Prompts": {
-            "ModsMissingTitle": "Модификации удалены",
+            "ModsMissingTitle": "Моды удалены",
             "ModsMissingMessage": "Некоторые моды отсутствуют и были удалены из коллекции автоматически:{NewLine}{NewLine}{Mods}"
         }
 
@@ -273,12 +273,12 @@
                 "Message": "Разрешитель конфликтов - штука сложная. Он требует определенных знаний и опыта в исправлении кода. Пользователям небольших коллекций модов он вряд ли может понадобиться, а пользователям больших коллекций, в которых почти наверняка могут быть конфликты, стоит либо подумать над уменьшением своих сборок, либо над изучением темы исправления и совмещения модов, если такими знаниями они не обладают. Если в результате использования разрешителя конфликтов вы что-нибудь сломаете, то вам будет практически невозможно помочь."
             },
             "GameExecutableNotSetPrompt": {
-                "Title": "Исполняемый файл игры не установлен",
-                "Message": "Исполняемый файл игры не был установлен в настройках. Эта коллекция модов ранее включала в свой анализ файлы игры. Решатель конфликтов не сможет анализировать файлы игры, и некоторые разрешения могут быть сброшены. Вы хотите продолжить?"
+                "Title": "Исполняемый файл игры не выбран",
+                "Message": "Исполняемый файл игры не указан в опциях. Эта коллекция модов ранее включала в свой анализ файлы игры. Разрешитель конфликтов не сможет анализировать файлы игры, и некоторые разрешеннные конфликты могут быть сброшены. Продолжить?"
             },
             "TooLargePrompt": {
-                "Title": "Слишком большой",
-                "Message": "Обнаружен мод с большим исходным кодом, который потенциально может вызвать сбой из-за нехватки памяти в Irony. Игра также вряд ли сможет обработать такие большие исходные файлы."
+                "Title": "Слишком большой мод",
+                "Message": "Обнаружен мод с большим исходным кодом, который потенциально может вызвать сбой в Irony из-за нехватки памяти. Игра также вряд ли сможет обработать такие большие файлы."
             }
         },
         "LaunchGame": {
@@ -291,7 +291,7 @@
             },
             "NotSet": {
                 "Title": "Игра не задана",
-                "Message": "Irony не смог автоматически обнаружить игру для управления, укажите вручную путь к исполняемому файлу игры в опциях."
+                "Message": "Irony не смог автоматически обнаружить игру для управления, укажите путь к исполняемому файлу игры в опциях вручную."
             }
         }
     },
@@ -309,7 +309,7 @@
         "Resolve": "Разрешить",
         "Ignore": "Игнорировать",
         "IgnoreRules": "Правила игнорирования",
-        "OverlayResolve": "Разрешение конфликта...",
+        "OverlayResolve": "Разрешение конфликтов...",
         "NextConflict": "След. конфликт",
         "PrevConflict": "Пред. конфликт",
         "ConflictCount": "Кол-во конфликтов: {Count}",
@@ -337,7 +337,7 @@
             "CopyAll": "Копировать все",
             "CopyThis": "Копировать",
             "CopyThisAfterLine": "Копировать после строки",
-            "CopyThisBeforeLine": "Копировать перед строкой",
+            "CopyThisBeforeLine": "Копировать до строки",
             "MoveUp": "Вверх",
             "MoveDown": "Вниз",
             "Edit": "Изменить",
@@ -348,7 +348,7 @@
             "Redo": "Вернуть",
             "Editor": "Внешнее объединение",
             "ReadonlyEditor": "Внешнее сравнение",
-            "ToggleCompare": "Переключение режима сравнения диффов"
+            "ToggleCompare": "Переключить режим сравнения различий"
         },
         "EditorContextMenu": {
             "Copy": "Копировать",
@@ -364,16 +364,16 @@
         "EditorResources": {
             "ReplaceLabel": "Замените...",
             "SearchErrorText": "Ошибка: ",
-            "SearchFindNextText": "Найти следующий (F3)",
-            "SearchFindPreviousText": "Найти предыдущий (Shift+F3)",
+            "SearchFindNextText": "Найти далее (F3)",
+            "SearchFindPreviousText": "Найти ранее (Shift+F3)",
             "SearchLabel": "Найти...",
-            "SearchMatchCaseText": "Матчевый случай",
-            "SearchMatchWholeWordsText": "Сопоставьте целые слова",
-            "SearchNoMatchesFoundText": "Результаты не найдены!",
+            "SearchMatchCaseText": "Учитывать регистр",
+            "SearchMatchWholeWordsText": "Искать слова целиком",
+            "SearchNoMatchesFoundText": "Совпадений не найдено!",
             "SearchReplaceAll": "Заменить все (Alt+A)",
-            "SearchReplaceNext": "Заменить следующий (Alt+R)",
-            "SearchToggleReplace": "Переключение между режимами поиска и замены",
-            "SearchUseRegexText": "Используйте регулярные выражения"
+            "SearchReplaceNext": "Заменить следующее (Alt+R)",
+            "SearchToggleReplace": "Переключение между поиском и заменой",
+            "SearchUseRegexText": "Использовать регулярные выражения"
         },
         "Modes": {
             "Title": "Режим",
@@ -381,7 +381,7 @@
             "Advanced": "Расширенный",
             "Analyze": "Только анализ",
             "AnalyzeWithoutLocalization": "Только анализ без локализации",
-            "DefaultWithoutLocalization": "По умолчанию без локализации",
+            "DefaultWithoutLocalization": "Стандартный без локализации",
             "AdvancedWithoutLocalization": "Продвинутый без локализации",
             "Close": "Закрыть"
         },
@@ -429,20 +429,20 @@
             "MessageNoLine": "Виртуальное определение не может быть использовано для разрешения конфликта. Виртуальное определение не прошло проверку.{NewLine}{NewLine}{ErrorMessage}"
         },
         "BracketMismatchError": {
-            "Message": "Несоответствие количества скобок! Открытая скобка: {OpenBracketCount} Закрытая скобка: {CloseBracketCount}"
+            "Message": "Несоответствие количества скобок! Открытых скобок: {OpenBracketCount} Закрытых скобок: {CloseBracketCount}"
         },
         "ResetWarning": {
-            "Title": "Конфликты сброс",
-            "AnalyzeModeAll": "Некоторые конфликты будут сброшены, если решатель конфликтов выполняется из-за изменений мода. Эти разрешенные конфликты, которые будут сброшены:{NewLine}{NewLine}{ListOfConflictsResolved}{NewLine}Они игнорируются конфликтами, которые будут сброшены:{NewLine}{NewLine}{ListOfConflictsIgnored}",
-            "AnalyzeModeResolvedOnly": "Некоторые конфликты будут сброшены, если решатель конфликтов выполняется из-за изменений мода. Эти разрешенные конфликты, которые будут сброшены:{NewLine}{NewLine}{ListOfConflictsResolved}",
-            "AnalyzeModeIgnoredOnly": "Некоторые конфликты будут сброшены, если решатель конфликтов выполняется из-за изменений мода. Они игнорируются конфликтами, которые будут сброшены:{NewLine}{NewLine}{ListOfConflictsIgnored}",
-            "RegularModeAll": "Некоторые конфликты были сброшены из-за изменений мода. Они были сброшены разрешенные конфликты:{NewLine}{NewLine}{ListOfConflictsResolved}{NewLine}Они были сброшены игнорированные конфликты:{NewLine}{NewLine}{ListOfConflictsIgnored}",
-            "RegularModeResolvedOnly": "Некоторые конфликты были сброшены из-за изменений мода. Они были сброшены разрешенные конфликты:{NewLine}{NewLine}{ListOfConflictsResolved}",
-            "RegularModeIgnoredOnly": "Некоторые конфликты были сброшены из-за изменений мода. Они были сброшены игнорированные конфликты:{NewLine}{NewLine}{ListOfConflictsIgnored}",
+            "Title": "Сброс конфликтов",
+            "AnalyzeModeAll": "Некоторые конфликты будут сброшены, если разрешатель конфликтов запускается после изменений в модах. Эти разрешенные конфликты будут сброшены:{NewLine}{NewLine}{ListOfConflictsResolved}{NewLine}Эти игнорированные конфликты будут сброшены:{NewLine}{NewLine}{ListOfConflictsIgnored}",
+            "AnalyzeModeResolvedOnly": "Некоторые конфликты будут сброшены, если разрешатель конфликтов запускается после изменений в модах. Эти разрешенные конфликты будут сброшены:{NewLine}{NewLine}{ListOfConflictsResolved}",
+            "AnalyzeModeIgnoredOnly": "Некоторые конфликты будут сброшены, если разрешатель конфликтов запускается после изменений в модах. Эти игнорированные конфликты будут сброшены:{NewLine}{NewLine}{ListOfConflictsIgnored}",
+            "RegularModeAll": "Некоторые конфликты были сброшены из-за изменений в модах. Эти разрешенные конфликты были сброшены:{NewLine}{NewLine}{ListOfConflictsResolved}{NewLine}Эти игнорированные конфликты были сброшены:{NewLine}{NewLine}{ListOfConflictsIgnored}",
+            "RegularModeResolvedOnly": "Некоторые конфликты были сброшены из-за изменений в модах. Эти разрешенные конфликты были сброшены:{NewLine}{NewLine}{ListOfConflictsResolved}",
+            "RegularModeIgnoredOnly": "Некоторые конфликты были сброшены из-за изменений в модах. Эти игнорированные конфликты были сброшены:{NewLine}{NewLine}{ListOfConflictsIgnored}",
             "ListOfConflictsFormat": "{ParentDirectory}: {Name}"
         },
         "Tooltips": {
-            "DefinitionInfo": "Файл:{File} Модифицировано:{DateTime}"
+            "DefinitionInfo": "Файл:{File} Изменен:{DateTime}"
         }
     },
     "ConflictIgnore": {
@@ -481,11 +481,11 @@
         "ConflictSolver": {
             "Title": "Разрешитель конфликтов",
             "AllowedLanguages": "Разрешенные языки",
-            "Colors": "Новые цвета Diff Viewer",
+            "Colors": "Изменить цвета Просмотрщика различий",
             "ConflictSolverDeletedLineColor": "Удаленная строка",
-            "ConflictSolverImaginaryLineColor": "Воображаемая линия",
-            "ConflictSolverInsertedLineColor": "Вставленная линия",
-            "ConflictSolverModifiedLineColor": "Измененная линия"
+            "ConflictSolverImaginaryLineColor": "Воображаемая строка",
+            "ConflictSolverInsertedLineColor": "Вставленная строка",
+            "ConflictSolverModifiedLineColor": "Измененная строка"
         },
         "Updates": {
             "Title": "Обновления",
@@ -503,15 +503,15 @@
             },
             "Errors": {
                 "DownloadErrorTitle": "Ошибка обновления",
-                "DownloadErrorMessage": "Возникла ошибка при загрузке обновления, смотрите лог для подробностей."
+                "DownloadErrorMessage": "Возникла ошибка при загрузке обновления, подробности в логе."
             },
             "AutoUpdatePrompts": {
                 "Title": "Автопроверка обновлений",
-                "Message": "Irony спрашивает разрешения на проверку обновлений при запуске приложения. Вы хотели бы, чтобы Irony обновлялся автоматически??"
+                "Message": "Irony спрашивает разрешения на проверку обновлений при запуске приложения. Вы бы хотели, чтобы Irony обновлялся автоматически??"
             },
             "UpdateNotification": {
                 "Title": "Есть обновления",
-                "Message": "Перейдите в меню опций, чтобы проверить обновления или нажмите на это сообщение."
+                "Message": "Перейдите в меню опций, чтобы проверить обновления, или нажмите на это сообщение."
             }
         },
         "Dialog": {
@@ -579,7 +579,7 @@
             "Message": "Дескрипторы были разблокированы."
         },
         "NewDescriptorsChecked": {
-            "Title": "Список обновлен",
+            "Title": "Новые моды проверены",
             "Message": "Список модов обновлен, если были установлены новые моды, они должны появиться здесь."
         },
         "CollectionRenamed": {
@@ -619,8 +619,8 @@
             "Message": "На диске недостаточно свободного места, чтобы произвести объединение."
         },
         "ParadoxLauncherRunning": {
-            "Title": "Парадокс, запускающий активный",
-            "Message": "Парадокс запускается, пожалуйста, закройте его, прежде чем попытаться сделать это действие."
+            "Title": "Paradox Launcher активен",
+            "Message": "Paradox Launcher запущен, пожалуйста, закройте его, прежде чем попытаться сделать это действие."
         }
     },
     "Mod_App_Actions": {
@@ -643,8 +643,8 @@
         "NotAchievementCompatible": "Мод несовместим с достижениями."
     },
     "ModSource": {
-        "Paradox": "Источник мода от Paradox Interactive",
-        "Steam": "Источник мода из Steam",
+        "Paradox": "Источник мода - Paradox Interactive",
+        "Steam": "Источник мода - Steam",
         "Local": "Источник мода локальный"
     },
     "Sorting": {
@@ -660,11 +660,11 @@
         "Achievements": "достижения",
         "Source": "источник",
         "Version": "версия",
-        "Selected": "выбранный",
+        "Selected": "выбрано",
         "Yes": "да",
         "No": "Нет",
-        "True": "истинный",
-        "False": "ложный",
+        "True": "true",
+        "False": "false",
         "Steam": "steam",
         "Paradox": "paradox",
         "Local": "локальный"
