@@ -4,7 +4,7 @@
 // Created          : 03-20-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 03-19-2024
+// Last Modified On : 10-05-2025
 // ***********************************************************************
 // <copyright file="MergeViewerControlViewModel.cs" company="Mario">
 //     Mario
@@ -58,6 +58,11 @@ namespace IronyModManager.ViewModels.Controls
         ILocalizationManager localizationManager) : BaseViewModel
     {
         #region Fields
+
+        /// <summary>
+        /// The hotkey lock
+        /// </summary>
+        private static readonly object hotkeyLock = new { };
 
         /// <summary>
         /// The URL action
@@ -118,6 +123,11 @@ namespace IronyModManager.ViewModels.Controls
         /// The right definition
         /// </summary>
         private IDefinition rightDefinition;
+
+        /// <summary>
+        /// The setting diffs indicator
+        /// </summary>
+        private bool settingDiffs;
 
         /// <summary>
         /// The syncing selection
@@ -199,11 +209,9 @@ namespace IronyModManager.ViewModels.Controls
         public virtual bool CanPerformHotKeyActions { get; set; }
 
         /// <summary>
-        /// Gets or sets a value representing the color converter.<see cref="IronyModManager.Implementation.AvaloniaEdit.EditorColorConverter"/>
+        /// Gets or sets a value representing the color converter.<see cref="IronyModManager.Implementation.AvaloniaEdit.EditorColorConverter" />
         /// </summary>
-        /// <value>
-        /// The color converter.
-        /// </value>
+        /// <value>The color converter.</value>
         public virtual EditorColorConverter ColorConverter { get; protected set; }
 
         /// <summary>
@@ -430,26 +438,20 @@ namespace IronyModManager.ViewModels.Controls
         /// <summary>
         /// Gets or sets a value representing the edit this here.
         /// </summary>
-        /// <value>
-        /// The edit this here.
-        /// </value>
+        /// <value>The edit this here.</value>
         [StaticLocalization(LocalizationResources.Conflict_Solver.ContextMenu.EditHere)]
         public virtual string EditThisHere { get; protected set; }
 
         /// <summary>
-        /// Gets or sets a value representing the edit this here command.<see cref="ReactiveUI.ReactiveCommand{bool, System.Reactive.Unit}"/>
+        /// Gets or sets a value representing the edit this here command.<see cref="ReactiveUI.ReactiveCommand{bool, System.Reactive.Unit}" />
         /// </summary>
-        /// <value>
-        /// The edit this here command.
-        /// </value>
+        /// <value>The edit this here command.</value>
         public virtual ReactiveCommand<bool, Unit> EditThisHereCommand { get; protected set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether the focus selected line.
         /// </summary>
-        /// <value>
-        /// <c>true</c> if focus selected line; otherwise, <c>false</c>.
-        /// </value>
+        /// <value><c>true</c> if focus selected line; otherwise, <c>false</c>.</value>
         public virtual bool FocusSelectedLine { get; protected set; }
 
         /// <summary>
@@ -791,12 +793,14 @@ namespace IronyModManager.ViewModels.Controls
         /// <param name="right">The right.</param>
         protected virtual void Compare(string left, string right)
         {
+            settingDiffs = true;
             var builder = new SideBySideDiffBuilder(new Differ());
             var diff = builder.BuildDiffModel(left, right, true);
             PreviousLeftDiff = LeftDiff;
             PreviousRightDiff = RightDiff;
             LeftDiff = GetDiffPieceWithIndex(diff.OldText.Lines);
             RightDiff = GetDiffPieceWithIndex(diff.NewText.Lines);
+            settingDiffs = false;
         }
 
         /// <summary>
@@ -808,7 +812,7 @@ namespace IronyModManager.ViewModels.Controls
         /// <param name="leftSide">if set to <c>true</c> [left side].</param>
         protected virtual void Copy(IEnumerable<DiffPieceWithIndex> selected, IList<DiffPieceWithIndex> source, IList<DiffPieceWithIndex> destination, bool leftSide)
         {
-            if (selected?.Count() > 0)
+            if (selected?.Count() > 0 && !settingDiffs)
             {
                 var idx = 0;
                 selected = CopyDiffPieceCollection(selected);
@@ -844,7 +848,7 @@ namespace IronyModManager.ViewModels.Controls
         /// <param name="leftSide">if set to <c>true</c> [left side].</param>
         protected virtual void CopyAfterLines(IEnumerable<DiffPieceWithIndex> selected, IList<DiffPieceWithIndex> source, IList<DiffPieceWithIndex> destination, bool leftSide)
         {
-            if (selected?.Count() > 0)
+            if (selected?.Count() > 0 && !settingDiffs)
             {
                 var idx = 0;
                 selected = CopyDiffPieceCollection(selected);
@@ -926,7 +930,7 @@ namespace IronyModManager.ViewModels.Controls
         /// <param name="leftSide">if set to <c>true</c> [left side].</param>
         protected virtual void CopyBeforeLines(IEnumerable<DiffPieceWithIndex> selected, IList<DiffPieceWithIndex> source, IList<DiffPieceWithIndex> destination, bool leftSide)
         {
-            if (selected?.Count() > 0)
+            if (selected?.Count() > 0 && !settingDiffs)
             {
                 var idx = 0;
                 selected = CopyDiffPieceCollection(selected);
@@ -1183,7 +1187,7 @@ namespace IronyModManager.ViewModels.Controls
         /// <param name="leftSide">if set to <c>true</c> [left side].</param>
         protected virtual void Move(bool moveUp, IEnumerable<DiffPieceWithIndex> selected, IList<DiffPieceWithIndex> source, bool leftSide)
         {
-            if (selected?.Count() > 0)
+            if (selected?.Count() > 0 && !settingDiffs)
             {
                 var idx = 0;
                 selected = CopyDiffPieceCollection(selected);
@@ -1408,6 +1412,7 @@ namespace IronyModManager.ViewModels.Controls
             {
                 void performAction()
                 {
+                    // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
                     switch (m.Hotkey)
                     {
                         case Enums.HotKeys.Ctrl_Up:
@@ -1588,7 +1593,10 @@ namespace IronyModManager.ViewModels.Controls
 
                 if (CanPerformHotKeyActions)
                 {
-                    Dispatcher.UIThread.SafeInvoke(performAction);
+                    lock (hotkeyLock)
+                    {
+                        Dispatcher.UIThread.SafeInvoke(performAction);
+                    }
                 }
             }).DisposeWith(disposables);
 
