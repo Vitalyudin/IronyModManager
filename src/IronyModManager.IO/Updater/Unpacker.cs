@@ -4,24 +4,25 @@
 // Created          : 09-17-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 09-19-2021
+// Last Modified On : 05-12-2026
 // ***********************************************************************
 // <copyright file="Unpacker.cs" company="Mario">
 //     Mario
 // </copyright>
 // <summary></summary>
 // ***********************************************************************
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Ionic.Zip;
 using IronyModManager.IO.Common;
 using IronyModManager.IO.Common.MessageBus;
 using IronyModManager.IO.Common.Updater;
 using IronyModManager.Shared;
 using IronyModManager.Shared.MessageBus;
-using SharpCompress.Archives;
 
 namespace IronyModManager.IO.Updater
 {
@@ -68,31 +69,46 @@ namespace IronyModManager.IO.Updater
             {
                 return string.Empty;
             }
-            var extractPath = Path.Combine(Path.GetDirectoryName(path), Path.GetFileNameWithoutExtension(path));
+
+            var extractPath = Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path));
+
             // Cleanup path were extracting to
             if (Directory.Exists(extractPath))
             {
                 DiskOperations.DeleteDirectory(extractPath, true);
             }
+
             // Throwing exception because of this? While previously it would automatically be created
             Directory.CreateDirectory(extractPath);
-            using var fileStream = File.OpenRead(path);
-            using var reader = ArchiveFactory.Open(fileStream);
-            var all = reader.Entries.Where(entry => !entry.IsDirectory);
-            double total = all.Count();
+            using var zip = ZipFile.Read(path);
+            var all = zip.Where(entry => !entry.IsDirectory).ToList();
+            double total = all.Count;
             double processed = 0;
             var lastPercentage = 0;
             foreach (var entry in all)
             {
-                entry.WriteToDirectory(extractPath, ZipExtractionOpts.GetExtractionOptions());
+                var relativePath = ZipExtractionOpts.SanitizeArchivePath(entry.FileName);
+                var destinationFile = Path.Combine(extractPath, relativePath);
+
+                var parentDirectory = Path.GetDirectoryName(destinationFile);
+                if (!string.IsNullOrWhiteSpace(parentDirectory))
+                {
+                    Directory.CreateDirectory(parentDirectory);
+                }
+
+                ZipExtractionOpts.ExtractEntryToFile(entry, destinationFile);
+
                 processed++;
+
                 var progress = GetProgressPercentage(total, processed);
                 if (progress != lastPercentage)
                 {
                     await messageBus.PublishAsync(new UpdateUnpackProgressEvent(progress));
                 }
+
                 lastPercentage = progress;
             }
+
             return extractPath;
         }
 
@@ -114,6 +130,7 @@ namespace IronyModManager.IO.Updater
             {
                 perc = maxPerc;
             }
+
             return perc;
         }
 

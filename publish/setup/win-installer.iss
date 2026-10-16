@@ -5,8 +5,8 @@
 #define MyAppPublisher "Mario"
 #define MyAppURL "https://bcssov.github.io/IronyModManager/"
 #define MyAppExeName "IronyModManager.exe"
-#define PublishPath "..\..\src\IronyModManager\bin\x64\win-x64\net8.0\publish"
-#define SourcePath "..\..\src\IronyModManager\bin\x64\win-x64\net8.0\publish\win-x64"
+#define PublishPath "..\..\src\IronyModManager\bin\x64\win-x64\net10.0\publish"
+#define SourcePath "..\..\src\IronyModManager\bin\x64\win-x64\net10.0\publish\win-x64"
 #define MyAppVersion GetStringFileInfo(SourcePath + "\" + MyAppExeName, "ProductVersion")
 
 [Code]
@@ -45,8 +45,16 @@ OutputDir={#PublishPath}\win-x64-setup
 OutputBaseFilename=win-x64-setup
 Compression=lzma
 SolidCompression=yes
-WizardStyle=modern
+WizardStyle=modern dynamic
 UninstallDisplayIcon={app}\{#MyAppExeName}
+; "ArchitecturesAllowed=x64compatible" specifies that Setup cannot run
+; on anything but x64 and Windows 11 on Arm.
+ArchitecturesAllowed=x64compatible
+; "ArchitecturesInstallIn64BitMode=x64compatible" requests that the
+; install be done in "64-bit mode" on x64 or Windows 11 on Arm,
+; meaning it should use the native 64-bit Program Files directory and
+; the 64-bit view of the registry.
+ArchitecturesInstallIn64BitMode=x64compatible
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

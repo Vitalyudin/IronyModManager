@@ -4,13 +4,14 @@
 // Created          : 07-20-2022
 //
 // Last Modified By : Mario
-// Last Modified On : 10-29-2022
+// Last Modified On : 06-19-2026
 // ***********************************************************************
 // <copyright file="FileSignatureUtility.cs" company="Mario">
 //     Mario
 // </copyright>
 // <summary></summary>
 // ***********************************************************************
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -28,12 +29,17 @@ namespace IronyModManager.Shared
         /// <summary>
         /// The image identifier
         /// </summary>
-        private static readonly string[] ImageIds = new[] { "image" };
+        private static readonly string[] imageIds = ["image"];
 
         /// <summary>
         /// The text identifier
         /// </summary>
-        private static readonly string[] TextIds = new[] { "text", "application/json" };
+        private static readonly string[] textIds = ["text", "application/json"];
+
+        /// <summary>
+        /// The whitelisted text extensions
+        /// </summary>
+        private static readonly string[] whitelistedTextExtensions = [".mod"];
 
         #endregion Fields
 
@@ -46,7 +52,7 @@ namespace IronyModManager.Shared
         /// <returns><c>true</c> if [is image file] [the specified filename]; otherwise, <c>false</c>.</returns>
         public static bool IsImageFile(string filename)
         {
-            return IsOfType(filename, ImageIds, Constants.ImageExtensions);
+            return IsOfType(filename, imageIds, Constants.ImageExtensions);
         }
 
         /// <summary>
@@ -57,7 +63,7 @@ namespace IronyModManager.Shared
         /// <returns><c>true</c> if [is text file] [the specified filename]; otherwise, <c>false</c>.</returns>
         public static bool IsTextFile(string filename, Stream stream)
         {
-            return IsOfType(filename, stream, TextIds, Constants.TextExtensions);
+            return IsOfType(filename, stream, textIds, Constants.TextExtensions);
         }
 
         /// <summary>
@@ -67,7 +73,7 @@ namespace IronyModManager.Shared
         /// <returns><c>true</c> if [is text file] [the specified filename]; otherwise, <c>false</c>.</returns>
         public static bool IsTextFile(string filename)
         {
-            return IsOfType(filename, TextIds, Constants.TextExtensions);
+            return IsOfType(filename, textIds, Constants.TextExtensions);
         }
 
         /// <summary>
@@ -84,12 +90,19 @@ namespace IronyModManager.Shared
             {
                 return false;
             }
+
             var ms = new MemoryStream();
             stream.Seek(0, SeekOrigin.Begin);
             stream.CopyTo(ms);
             stream.Seek(0, SeekOrigin.Begin);
             ms.Seek(0, SeekOrigin.Begin);
-            if (PommaLabs.MimeTypes.MimeTypeMap.TryGetMimeType(ms, Path.GetFileName(filename), out var mimeType))
+            if (whitelistedTextExtensions.Any(e => filename.EndsWith(e, StringComparison.OrdinalIgnoreCase) && extensions.Any(a => a.Equals(e, StringComparison.OrdinalIgnoreCase))))
+            {
+                ms.Close();
+                ms.Dispose();
+                return true;
+            }
+            else if (PommaLabs.MimeTypes.MimeTypeMap.TryGetMimeType(ms, Path.GetFileName(filename), out var mimeType))
             {
                 var result = ids.Any(p => mimeType.StartsWith(p, StringComparison.OrdinalIgnoreCase) && IsValidTextFile(ms));
                 ms.Close();
@@ -106,9 +119,10 @@ namespace IronyModManager.Shared
                     return ids.Any(p => mimeType.StartsWith(p, StringComparison.OrdinalIgnoreCase));
                 }
             }
+
             ms.Close();
             ms.Dispose();
-            return extensions.Any(s => s.EndsWith(filename, StringComparison.OrdinalIgnoreCase));
+            return extensions.Any(s => filename.EndsWith(s, StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>
@@ -120,7 +134,11 @@ namespace IronyModManager.Shared
         /// <returns><c>true</c> if [is of type] [the specified filename]; otherwise, <c>false</c>.</returns>
         private static bool IsOfType(string filename, string[] ids, string[] extensions)
         {
-            if (PommaLabs.MimeTypes.MimeTypeMap.TryGetMimeType(Path.GetFileName(filename), out var mimeType))
+            if (whitelistedTextExtensions.Any(e => filename.EndsWith(e, StringComparison.OrdinalIgnoreCase) && extensions.Any(a => a.Equals(e, StringComparison.OrdinalIgnoreCase))))
+            {
+                return true;
+            }
+            else if (PommaLabs.MimeTypes.MimeTypeMap.TryGetMimeType(Path.GetFileName(filename), out var mimeType))
             {
                 return ids.Any(p => mimeType.StartsWith(p, StringComparison.OrdinalIgnoreCase));
             }
@@ -132,7 +150,8 @@ namespace IronyModManager.Shared
                     return ids.Any(p => mimeType.StartsWith(p, StringComparison.OrdinalIgnoreCase));
                 }
             }
-            return extensions.Any(s => s.EndsWith(filename, StringComparison.OrdinalIgnoreCase));
+
+            return extensions.Any(s => filename.EndsWith(s, StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>
@@ -149,22 +168,33 @@ namespace IronyModManager.Shared
                 {
                     return true;
                 }
+
                 stream.Seek(-512, SeekOrigin.End);
                 var buffer = new byte[512];
                 var byteCount = stream.Read(buffer, 0, buffer.Length);
 
-                for (var i = 1; i < byteCount; i++)
+                var suspicious = 0;
+
+                for (var i = 0; i < byteCount; i++)
                 {
-                    if (buffer[i] == 0x00 && buffer[i - 1] == 0x00)
+                    var b = buffer[i];
+
+                    switch (b)
                     {
-                        return false;
+                        case 0x00:
+                            return false;
+                        case < 0x09:
+                        case > 0x0D and < 0x20:
+                            suspicious++;
+                            break;
                     }
                 }
-                return true;
+
+                return suspicious <= byteCount / 20;
             }
             catch
             {
-                return true;
+                return false;
             }
         }
 

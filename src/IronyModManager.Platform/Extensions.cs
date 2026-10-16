@@ -4,17 +4,20 @@
 // Created          : 10-29-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 05-12-2023
+// Last Modified On : 07-27-2026
 // ***********************************************************************
 // <copyright file="Extensions.cs" company="Mario">
 //     Mario
 // </copyright>
 // <summary></summary>
 // ***********************************************************************
+
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Platform;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -23,8 +26,10 @@ using IronyModManager.DI;
 using IronyModManager.Platform.Assets;
 using IronyModManager.Platform.Clipboard;
 using IronyModManager.Platform.Configuration;
+using IronyModManager.Platform.Dbus;
 using IronyModManager.Platform.Drives;
 using IronyModManager.Platform.Fonts;
+using IronyModManager.Platform.Windows;
 using IronyModManager.Shared;
 
 namespace IronyModManager.Platform
@@ -47,57 +52,82 @@ namespace IronyModManager.Platform
             where TAppBuilder : AppBuilderBase<TAppBuilder>, new()
         {
             var os = builder.RuntimePlatform.GetRuntimeInfo().OperatingSystem;
-            var options = DIResolver.Get<IPlatformConfiguration>().GetOptions().LinuxOptions;
-            if (LinuxDisplayServer.IsAuto(options.DisplayServer))
+            var useAutoDetect = true;
+
+            // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
+            switch (os)
             {
-                // Use the same logic from the fork, if env variable is set then use wayland display otherwise fallback
-                if (Environment.GetEnvironmentVariable("WAYLAND_DISPLAY") is not null)
+                case OperatingSystemType.Linux:
                 {
-                    LoadWayland(builder);
-                    builder.UseSkia();
-                }
-                else
-                {
-                    builder.UsePlatformDetect();
+                    var options = DIResolver.Get<IPlatformConfiguration>().GetOptions().LinuxOptions;
+                    if (LinuxDisplayServer.IsAuto(options.DisplayServer))
+                    {
+                        // Use the same logic from the fork, if env variable is set then use wayland display otherwise fallback
+                        if (Environment.GetEnvironmentVariable("WAYLAND_DISPLAY") is not null)
+                        {
+                            LoadWayland(builder);
+                            builder.UseSkia();
+                            useAutoDetect = false;
+                        }
+                    }
+                    else if (LinuxDisplayServer.IsWayland(options.DisplayServer))
+                    {
+                        // User says I want wayland give them wayland
+                        LoadWayland(builder);
+                        builder.UseSkia();
+                        useAutoDetect = false;
+                    }
+
+                    break;
                 }
             }
-            else if (LinuxDisplayServer.IsX11(options.DisplayServer))
+
+            if (useAutoDetect)
             {
-                // Standard check if x11 it will fallback to x11 itself
                 builder.UsePlatformDetect();
             }
-            else if (LinuxDisplayServer.IsWayland(options.DisplayServer))
+
+            if (os == OperatingSystemType.WinNT)
             {
-                // User says I want wayland give them wayland
-                if (os == OperatingSystemType.Linux)
+                var renderingInitializer = builder.RenderingSubsystemInitializer;
+                var renderingSubsystemName = builder.RenderingSubsystemName;
+                builder.UseRenderingSubsystem(() =>
                 {
-                    LoadWayland(builder);
-                    builder.UseSkia();
-                }
-                else
-                {
-                    builder.UsePlatformDetect();
-                }
+                    WinUiCompositionWatchdogCompatibility.TryInstall();
+                    renderingInitializer();
+                }, renderingSubsystemName);
             }
-            builder.AfterSetup(s =>
+
+            builder.AfterSetup(appBuilder =>
             {
                 // Use already registered manager as a proxy -- doing it like this because the implementation is hidden away as internal
                 var fontManager = AvaloniaLocator.Current.GetService<IFontManagerImpl>();
                 AvaloniaLocator.CurrentMutable.Bind<IFontManagerImpl>().ToConstant(new FontManager(fontManager));
+
                 // Too many variations to take into consideration so escape the hacky way of getting clipboard implementation
                 var clipboard = AvaloniaLocator.Current.GetService<IClipboard>();
                 AvaloniaLocator.CurrentMutable.Bind<IClipboard>().ToConstant(new IronyClipboard(clipboard));
+
                 // Asset loader
                 AssetLoader.RegisterResUriParsers();
                 AvaloniaLocator.CurrentMutable.Bind<IAssetLoader>().ToConstant(new AssetLoader());
+
                 // Input manager
                 var inputManager = AvaloniaLocator.Current.GetService<IInputManager>();
                 AvaloniaLocator.CurrentMutable.Bind<IInputManager>().ToConstant(new InputManager.InputManager(inputManager));
+
                 // Windows only
                 if (os == OperatingSystemType.WinNT)
                 {
                     AvaloniaLocator.CurrentMutable.Bind<IMountedVolumeInfoProvider>().ToConstant(new WindowsMountedVolumeInfoProvider());
+
+                    if (appBuilder.Instance.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktopLifetime)
+                    {
+                        desktopLifetime.Exit += (_, _) => WinUiCompositionWatchdogCompatibility.Stop();
+                    }
                 }
+
+                SafeX11InputMethod.TryInstall();
             });
             return builder;
         }

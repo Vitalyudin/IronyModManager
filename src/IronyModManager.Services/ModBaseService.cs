@@ -4,7 +4,7 @@
 // Created          : 04-07-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 02-11-2025
+// Last Modified On : 05-18-2026
 // ***********************************************************************
 // <copyright file="ModBaseService.cs" company="Mario">
 //     Mario
@@ -240,7 +240,7 @@ namespace IronyModManager.Services
                             var replaceDefinitions = definitions.Where(p => p.FileCI.Contains(Shared.Constants.LocalizationReplaceDirectory, StringComparison.OrdinalIgnoreCase));
                             if (replaceDefinitions.GroupBy(p => p.CustomPriorityOrder).Count() == 1)
                             {
-                                filtered = replaceDefinitions.ToList();
+                                filtered = [.. replaceDefinitions];
                             }
                             else
                             {
@@ -252,7 +252,7 @@ namespace IronyModManager.Services
                         {
                             if (definitions.GroupBy(p => p.CustomPriorityOrder).Count() == 1)
                             {
-                                filtered = definitions.ToList();
+                                filtered = [.. definitions];
                             }
                             else
                             {
@@ -267,7 +267,7 @@ namespace IronyModManager.Services
                             case 1:
                             {
                                 var definition = uniqueDefinitions.FirstOrDefault(p => !p.IsFromGame);
-                                result.DefinitionOrder = definition != null ? uniqueDefinitions.Where(p => !p.IsFromGame).Union(uniqueDefinitions.Where(p => p.IsFromGame)).ToList() : uniqueDefinitions.ToList();
+                                result.DefinitionOrder = definition != null ? [.. uniqueDefinitions.Where(p => !p.IsFromGame).Union(uniqueDefinitions.Where(p => p.IsFromGame))] : uniqueDefinitions.ToList();
                                 definition ??= uniqueDefinitions.FirstOrDefault();
                                 result.Definition = definition;
                                 result.FileName = definition!.File;
@@ -297,7 +297,7 @@ namespace IronyModManager.Services
                         var validDefinitions = definitions.Where(p => p.ExistsInLastFile).ToList();
                         if (validDefinitions.Any(d => !string.IsNullOrWhiteSpace(d.VirtualPath)))
                         {
-                            validDefinitions = definitions.Where(d => !string.IsNullOrWhiteSpace(d.VirtualPath)).ToList();
+                            validDefinitions = [.. definitions.Where(d => !string.IsNullOrWhiteSpace(d.VirtualPath))];
                         }
 
                         switch (validDefinitions.Count)
@@ -336,7 +336,7 @@ namespace IronyModManager.Services
                                 }
 
                                 var uniqueDefinitions = isFios
-                                    ? definitionEvals.GroupBy(p => p.Definition.ModName).Select(p => p.OrderBy(f => Path.GetFileNameWithoutExtension(f.FileName), StringComparer.Ordinal).First()).ToList()
+                                    ? [.. definitionEvals.GroupBy(p => p.Definition.ModName).Select(p => p.OrderBy(f => Path.GetFileNameWithoutExtension(f.FileName), StringComparer.Ordinal).First())]
                                     : definitionEvals.GroupBy(p => p.Definition.ModName).Select(p => p.OrderBy(f => Path.GetFileNameWithoutExtension(f.FileName), StringComparer.Ordinal).Last()).ToList();
 
                                 // Filter out game definitions which might have the same filename
@@ -358,7 +358,7 @@ namespace IronyModManager.Services
                                         var definition = definitionEvals.FirstOrDefault(p => !p.Definition.IsFromGame);
                                         result.DefinitionOrder = definition != null
                                             ? definitionEvals.Where(p => !p.Definition.IsFromGame).Union(uniqueDefinitions.Where(p => p.Definition.IsFromGame)).Select(p => p.Definition).ToList()
-                                            : definitionEvals.Select(p => p.Definition).ToList();
+                                            : [.. definitionEvals.Select(p => p.Definition)];
                                         definition ??= definitionEvals.FirstOrDefault();
                                         result.Definition = definition!.Definition;
                                         result.FileName = definition.FileName;
@@ -382,7 +382,7 @@ namespace IronyModManager.Services
                                             var definition = uniqueDefinitions.FirstOrDefault(p => p.Definition.IsCustomPatch);
                                             result.Definition = definition!.Definition;
                                             result.FileName = definition.FileName;
-                                            result.DefinitionOrder = uniqueDefinitions.Where(p => !p.Definition.IsCustomPatch).Union(uniqueDefinitions.Where(p => p.Definition.IsCustomPatch)).Select(p => p.Definition).ToList();
+                                            result.DefinitionOrder = [.. uniqueDefinitions.Where(p => !p.Definition.IsCustomPatch).Union(uniqueDefinitions.Where(p => p.Definition.IsCustomPatch)).Select(p => p.Definition)];
                                         }
                                         else
                                         {
@@ -391,7 +391,7 @@ namespace IronyModManager.Services
                                             result.FileName = definition.FileName;
                                             var reverse = new List<DefinitionEval>(uniqueDefinitions);
                                             reverse.Reverse();
-                                            result.DefinitionOrder = reverse.Select(p => p.Definition).ToList();
+                                            result.DefinitionOrder = [.. reverse.Select(p => p.Definition)];
                                         }
 
                                         result.PriorityType = DefinitionPriorityType.ModOrder;
@@ -407,7 +407,7 @@ namespace IronyModManager.Services
                                         result.Definition = definition.Definition;
                                         result.FileName = definition.FileName;
                                         result.PriorityType = DefinitionPriorityType.FIOS;
-                                        result.DefinitionOrder = ordered.Select(p => p.Definition).ToList();
+                                        result.DefinitionOrder = [.. ordered.Select(p => p.Definition)];
                                         break;
                                     }
                                     case > 1:
@@ -417,7 +417,7 @@ namespace IronyModManager.Services
                                         result.Definition = definition.Definition;
                                         result.FileName = definition.FileName;
                                         result.PriorityType = DefinitionPriorityType.LIOS;
-                                        result.DefinitionOrder = ordered.Select(p => p.Definition).ToList();
+                                        result.DefinitionOrder = [.. ordered.Select(p => p.Definition)];
                                         break;
                                     }
                                 }
@@ -441,7 +441,7 @@ namespace IronyModManager.Services
                 if (definition == null && (definitions?.Any()).GetValueOrDefault())
                 {
                     definition = definitions!.FirstOrDefault();
-                    ordered = definitions.ToList();
+                    ordered = [.. definitions];
                 }
 
                 result.Definition = definition;
@@ -520,6 +520,7 @@ namespace IronyModManager.Services
             mod.Tags = ["Fixes"];
             mod.IsValid = true;
             mod.FullPath = mod.FileName.StandardizeDirectorySeparator();
+            mod.Game = game.Type;
             return mod;
         }
 
@@ -545,43 +546,66 @@ namespace IronyModManager.Services
         }
 
         /// <summary>
-        /// Gets the collection mods.
+        /// Gets the installed, file-backed members of a persisted collection.
         /// </summary>
         /// <param name="mods">The mods.</param>
         /// <param name="collectionName">Name of the collection.</param>
         /// <returns>IEnumerable&lt;IMod&gt;.</returns>
-        protected virtual IEnumerable<IMod> GetCollectionMods(IEnumerable<IMod> mods = null, string collectionName = Shared.Constants.EmptyParam)
+        protected virtual IEnumerable<IMod> GetFileBackedCollectionMods(IEnumerable<IMod> mods = null,
+            string collectionName = Shared.Constants.EmptyParam)
         {
-            mods ??= GetInstalledModsInternal(GameService.GetSelected(), false);
+            var installedMods = (mods ?? GetInstalledModsInternal(GameService.GetSelected(), false))
+                .Where(p => !p.IsVirtual).ToList();
             var collectionMods = new List<IMod>();
-            var collections = GetAllModCollectionsInternal();
-            if (collections?.Count() > 0)
+            var collection = GetModCollectionInternal(collectionName);
+            if (collection != null)
             {
-                var collection = !string.IsNullOrWhiteSpace(collectionName) ? collections.FirstOrDefault(p => p.Name.Equals(collectionName, StringComparison.OrdinalIgnoreCase)) : collections.FirstOrDefault(p => p.IsSelected);
-
-                if (collection != null)
+                var descriptors = collection.Mods?.ToList() ?? [];
+                var paths = collection.ModPaths?.ToList() ?? [];
+                var modsByDescriptor = installedMods
+                    .Where(p => !string.IsNullOrWhiteSpace(p.DescriptorFile))
+                    .GroupBy(p => p.DescriptorFile, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(p => p.Key, p => p.First(), StringComparer.OrdinalIgnoreCase);
+                var modsByPath = installedMods
+                    .Where(p => !string.IsNullOrWhiteSpace(p.FullPath))
+                    .GroupBy(p => p.FullPath, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(p => p.Key, p => p.First(), StringComparer.OrdinalIgnoreCase);
+                for (var index = 0; index < descriptors.Count; index++)
                 {
-                    var colMods = collection.Mods.ToList();
-                    var colModPaths = collection.ModPaths.ToList();
-                    for (var i = 0; i < colMods.Count; i++)
+                    var descriptor = descriptors[index];
+                    modsByDescriptor.TryGetValue(descriptor ?? string.Empty, out var mod);
+                    if (mod == null && paths.Count == descriptors.Count)
                     {
-                        var item = colMods[i];
-                        var mod = mods.FirstOrDefault(p => p.DescriptorFile.Equals(item, StringComparison.OrdinalIgnoreCase));
-                        if (mod == null && colModPaths.Count == colMods.Count)
-                        {
-                            item = colModPaths[i];
-                            mod = mods.FirstOrDefault(p => p.FullPath.Equals(item, StringComparison.OrdinalIgnoreCase));
-                        }
+                        modsByPath.TryGetValue(paths[index] ?? string.Empty, out mod);
+                    }
 
-                        if (mod != null)
-                        {
-                            collectionMods.Add(mod);
-                        }
+                    if (mod != null)
+                    {
+                        collectionMods.Add(mod);
                     }
                 }
             }
 
             return collectionMods;
+        }
+
+        /// <summary>
+        /// Gets the persisted descriptor order for a collection, including unavailable members.
+        /// </summary>
+        /// <param name="collectionName">Name of the collection.</param>
+        /// <returns>The persisted descriptor order.</returns>
+        protected virtual IReadOnlyList<string> GetPersistedCollectionModDescriptors(
+            string collectionName = Shared.Constants.EmptyParam)
+        {
+            return GetModCollectionInternal(collectionName)?.Mods?.ToList() ?? [];
+        }
+
+        private IModCollection GetModCollectionInternal(string collectionName)
+        {
+            var collections = GetAllModCollectionsInternal()?.ToList() ?? [];
+            return !string.IsNullOrWhiteSpace(collectionName)
+                ? collections.FirstOrDefault(p => p.Name.Equals(collectionName, StringComparison.OrdinalIgnoreCase))
+                : collections.FirstOrDefault(p => p.IsSelected);
         }
 
         /// <summary>
@@ -614,12 +638,14 @@ namespace IronyModManager.Services
             else
             {
                 var result = new ConcurrentBag<IMod>();
+                var aliases = StorageProvider.GetModAliases()?.Where(p => p.Game.Equals(game.Type, StringComparison.OrdinalIgnoreCase)).ToList() ?? [];
                 var installedMods = Reader.Read(Path.Combine(game.UserDirectory, game.ModDescriptorType == ModDescriptorType.DescriptorMod ? Shared.Constants.ModDirectory : Shared.Constants.JsonModDirectory));
                 if (installedMods?.Count() > 0)
                 {
+                    var args = new ModParserArgs { BaseSteamDirectory = game.BaseSteamGameDirectory, IsProton = !string.IsNullOrWhiteSpace(game.LinuxProtonVersion), SteamAppId = game.SteamAppId };
                     installedMods.Where(p => p.Content.Any()).AsParallel().WithDegreeOfParallelism(MaxModsToProcess).ForAll(installedMod =>
                     {
-                        var mod = Mapper.Map<IMod>(ModParser.Parse(installedMod.Content, MapDescriptorModType(game.ModDescriptorType)));
+                        var mod = Mapper.Map<IMod>(ModParser.Parse(installedMod.Content, MapDescriptorModType(game.ModDescriptorType), args));
                         if (ignorePatchMods && IsPatchModInternal(mod))
                         {
                             return;
@@ -665,6 +691,7 @@ namespace IronyModManager.Services
                         // Validate if path exists
                         mod.IsValid = File.Exists(mod.FullPath) || Directory.Exists(mod.FullPath);
                         mod.Game = game.Type;
+                        mod.NameOverride = aliases.FirstOrDefault(p => p.DescriptorFile.Equals(mod.DescriptorFile, StringComparison.OrdinalIgnoreCase))?.NameOverride;
                         result.Add(mod);
                     });
                 }
@@ -672,6 +699,21 @@ namespace IronyModManager.Services
                 Cache.Set(new CacheAddParameters<IEnumerable<IMod>> { Region = ModsCacheRegion, Prefix = game.Type, Key = GetModsCacheKey(ignorePatchMods), Value = [.. result] });
                 return result;
             }
+        }
+
+        /// <summary>
+        /// Applies the stored presentation override without changing canonical mod metadata.
+        /// </summary>
+        protected virtual void ApplyDisplayNameOverride(IMod mod)
+        {
+            if (mod == null || string.IsNullOrWhiteSpace(mod.Game) || string.IsNullOrWhiteSpace(mod.DescriptorFile))
+            {
+                return;
+            }
+
+            mod.NameOverride = StorageProvider.GetModAliases()?.FirstOrDefault(p =>
+                p.Game.Equals(mod.Game, StringComparison.OrdinalIgnoreCase) &&
+                p.DescriptorFile.Equals(mod.DescriptorFile, StringComparison.OrdinalIgnoreCase))?.NameOverride;
         }
 
         /// <summary>
@@ -882,7 +924,7 @@ namespace IronyModManager.Services
                         var allVars = namespaces.Concat(variables);
                         if (allVars.Any())
                         {
-                            definition.Variables = allVars.ToList();
+                            definition.Variables = [.. allVars];
                         }
 
                         if (string.IsNullOrWhiteSpace(definition.CodeTag))
@@ -989,26 +1031,41 @@ namespace IronyModManager.Services
         /// <returns>IEnumerable&lt;IDefinition&gt;.</returns>
         protected virtual IEnumerable<IDefinition> PopulateModPath(IEnumerable<IDefinition> definitions, IEnumerable<IMod> collectionMods)
         {
-            if (definitions != null && definitions.Any())
+            if (definitions == null)
             {
-                foreach (var item in definitions)
-                {
-                    if (IsPatchModInternal(item.ModName))
-                    {
-                        item.ModPath = GetPatchModDirectory(GameService.GetSelected(), item.ModName);
-                    }
-                    else if (item.IsFromGame)
-                    {
-                        item.ModPath = PathResolver.GetPath(GameService.GetSelected());
-                    }
-                    else
-                    {
-                        item.ModPath = collectionMods.FirstOrDefault(p => p.Name.Equals(item.ModName))!.FullPath;
-                    }
-                }
+                return [];
             }
 
-            return definitions;
+            var populated = new List<IDefinition>();
+            var fileBackedMods = collectionMods?.Where(p => !p.IsVirtual)
+                .GroupBy(p => p.Name, StringComparer.Ordinal)
+                .ToDictionary(p => p.Key, p => p.First(), StringComparer.Ordinal) ??
+                new Dictionary<string, IMod>(StringComparer.Ordinal);
+            foreach (var item in definitions)
+            {
+                if (item == null)
+                {
+                    continue;
+                }
+
+                if (IsPatchModInternal(item.ModName))
+                {
+                    item.ModPath = GetPatchModDirectory(GameService.GetSelected(), item.ModName);
+                }
+                else if (item.IsFromGame)
+                {
+                    item.ModPath = PathResolver.GetPath(GameService.GetSelected());
+                }
+                else if (fileBackedMods.TryGetValue(item.ModName ?? string.Empty, out var mod) &&
+                         !string.IsNullOrWhiteSpace(mod.FullPath))
+                {
+                    item.ModPath = mod.FullPath;
+                }
+
+                populated.Add(item);
+            }
+
+            return populated;
         }
 
         /// <summary>
@@ -1042,7 +1099,7 @@ namespace IronyModManager.Services
             static List<string> extractVariable(string text)
             {
                 // All math operators or newline constants, whitespace and such
-                return text.Split([' ', '\t', '\n', '\r', '+', '/', '*', '%', '-', ')', '('], StringSplitOptions.RemoveEmptyEntries).Where(token => token.Any(char.IsLetter)).ToList();
+                return [.. text.Split([' ', '\t', '\n', '\r', '+', '/', '*', '%', '-', ')', '('], StringSplitOptions.RemoveEmptyEntries).Where(token => token.Any(char.IsLetter))];
             }
 
             if (string.IsNullOrWhiteSpace(code))

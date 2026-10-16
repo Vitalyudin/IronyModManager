@@ -4,7 +4,7 @@
 // Created          : 06-19-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 03-19-2024
+// Last Modified On : 05-18-2026
 // ***********************************************************************
 // <copyright file="ModMergeServiceTests.cs" company="Mario">
 //     Mario
@@ -17,9 +17,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
-using FluentAssertions;
+using AwesomeAssertions;
 using IronyModManager.IO;
 using IronyModManager.IO.Common;
+using IronyModManager.IO.Common.FileSystem;
 using IronyModManager.IO.Common.Mods;
 using IronyModManager.IO.Common.Readers;
 using IronyModManager.Models;
@@ -28,6 +29,7 @@ using IronyModManager.Parser.Common;
 using IronyModManager.Parser.Common.Mod;
 using IronyModManager.Parser.Mod;
 using IronyModManager.Services.Common;
+using IronyModManager.Shared;
 using IronyModManager.Shared.Cache;
 using IronyModManager.Shared.Configuration;
 using IronyModManager.Shared.MessageBus;
@@ -36,6 +38,9 @@ using IronyModManager.Storage.Common;
 using IronyModManager.Tests.Common;
 using Moq;
 using Xunit;
+using Path = System.IO.Path;
+
+// ReSharper disable All
 
 namespace IronyModManager.Services.Tests
 {
@@ -45,6 +50,131 @@ namespace IronyModManager.Services.Tests
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0028:Simplify collection initialization", Justification = "Old unit test, forget it")]
     public class ModMergeServiceTests
     {
+        private static (ModMergeService Service, GameStateSafetyService Safety, IGame Game, Mock<IModWriter> Writer)
+            CreateFileMergeSafetyFixture(Exception sourceFailure = null, Exception destinationFailure = null)
+        {
+            var messageBus = new Mock<IMessageBus>();
+            messageBus.Setup(p => p.PublishAsync(It.IsAny<IMessageBusEvent>()));
+            messageBus.Setup(p => p.Publish(It.IsAny<IMessageBusEvent>()));
+            var storageProvider = new Mock<IStorageProvider>();
+            var modParser = new Mock<IModParser>();
+            var reader = new Mock<IReader>();
+            var modWriter = new Mock<IModWriter>();
+            var gameService = new Mock<IGameService>();
+            var mapper = new Mock<IMapper>();
+            var game = new Game
+            {
+                Type = "merge-phase", UserDirectory = "user", WorkshopDirectory = ["workshop"],
+                CustomModDirectory = string.Empty
+            };
+            gameService.Setup(p => p.GetSelected()).Returns(game);
+            storageProvider.Setup(p => p.GetModCollections()).Returns([new ModCollection
+            {
+                IsSelected = true, Name = "collection", Game = game.Type, Mods = ["mod/source.mod"]
+            }]);
+            if (sourceFailure != null)
+            {
+                reader.Setup(p => p.Read(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<bool>()))
+                    .Throws(sourceFailure);
+            }
+            else
+            {
+                reader.Setup(p => p.Read(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<bool>()))
+                    .Returns([new FileInfo { FileName = "source.mod", Content = ["source"] }]);
+                modParser.Setup(p => p.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>(), It.IsAny<ModParserArgs>()))
+                    .Returns(new ModObject { FileName = "source.mod", Name = "source" });
+                mapper.Setup(p => p.Map<IMod>(It.IsAny<IModObject>())).Returns(new Mod
+                {
+                    FileName = "mod/source.mod", DescriptorFile = "mod/source.mod", Name = "source"
+                });
+            }
+
+            if (destinationFailure != null)
+            {
+                modWriter.Setup(p => p.PurgeModDirectoryAsync(It.IsAny<ModWriterParameters>(), It.IsAny<bool>()))
+                    .ThrowsAsync(destinationFailure);
+            }
+
+            var probe = new Mock<IFileSystemStateProbe>();
+            probe.Setup(p => p.IsFileSystemAccessFailure(It.IsAny<Exception>()))
+                .Returns((Exception exception) => exception is System.IO.IOException or UnauthorizedAccessException);
+            var safety = new GameStateSafetyService(probe.Object, Mock.Of<ILogger>());
+            var service = new ModMergeService(null, null, null, new Cache(), messageBus.Object,
+                Mock.Of<IModPatchExporter>(), Mock.Of<IModMergeExporter>(), [Mock.Of<IDefinitionInfoProvider>()],
+                reader.Object, modWriter.Object, modParser.Object, gameService.Object, storageProvider.Object,
+                mapper.Object, safety);
+            return (service, safety, game, modWriter);
+        }
+
+        [Fact]
+        public async Task File_merge_source_failure_should_lock_as_discovery_unavailable()
+        {
+            var fixture = CreateFileMergeSafetyFixture(sourceFailure: new System.IO.IOException("source unavailable"));
+
+            var result = await fixture.Service.MergeCollectionByFilesAsync("collection");
+
+            result.Should().BeNull();
+            fixture.Safety.GetLock(fixture.Game).Reason.Should().Be(GameStateLockReason.DiscoveryUnavailable);
+            fixture.Writer.Verify(p => p.PurgeModDirectoryAsync(It.IsAny<ModWriterParameters>(), It.IsAny<bool>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task File_merge_destination_failure_should_lock_as_write_access_failure()
+        {
+            var fixture = CreateFileMergeSafetyFixture(destinationFailure: new UnauthorizedAccessException());
+
+            var result = await fixture.Service.MergeCollectionByFilesAsync("collection");
+
+            result.Should().BeNull();
+            fixture.Safety.GetLock(fixture.Game).Reason.Should().Be(GameStateLockReason.WriteAccessFailure);
+        }
+
+        /// <summary>
+        /// Verifies all archive targets are checked before Merge Compress starts destructive work.
+        /// </summary>
+        [Fact]
+        public async Task Should_not_start_merge_compress_when_any_archive_is_unavailable()
+        {
+            var messageBus = new Mock<IMessageBus>();
+            var storageProvider = new Mock<IStorageProvider>();
+            var modParser = new Mock<IModParser>();
+            var reader = new Mock<IReader>();
+            var modWriter = new Mock<IModWriter>();
+            var gameService = new Mock<IGameService>();
+            var mapper = new Mock<IMapper>();
+            var modPatchExporter = new Mock<IModPatchExporter>();
+            var modMergeExporter = new Mock<IModMergeExporter>();
+            var infoProvider = new Mock<IDefinitionInfoProvider>();
+            var compressExporter = new Mock<IModMergeCompressExporter>();
+            var preferencesService = new Mock<IPreferencesService>();
+            preferencesService.Setup(p => p.Get()).Returns(new Preferences());
+            gameService.Setup(p => p.GetSelected()).Returns(new Game { Type = "preflight", UserDirectory = Path.GetTempPath(), WorkshopDirectory = [Path.GetTempPath()], CustomModDirectory = string.Empty });
+            storageProvider.Setup(p => p.GetModCollections()).Returns([new ModCollection
+            {
+                IsSelected = true,
+                Name = "collection",
+                Game = "preflight",
+                Mods = ["mod/one.mod", "mod/two.mod"]
+            }]);
+            reader.Setup(p => p.Read(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<bool>()))
+                .Returns([new FileInfo { FileName = "one.mod", Content = ["one"] }, new FileInfo { FileName = "two.mod", Content = ["two"] }]);
+            modParser.Setup(p => p.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>(), It.IsAny<ModParserArgs>()))
+                .Returns((IEnumerable<string> values, DescriptorModType _, ModParserArgs _) => new ModObject { FileName = values.First(), Name = values.First() });
+            mapper.Setup(p => p.Map<IMod>(It.IsAny<IModObject>()))
+                .Returns((IModObject value) => new Mod { FileName = $"mod/{value.FileName}.mod", Name = value.FileName });
+
+            compressExporter.Setup(p => p.GetUnavailableArchivePaths(It.IsAny<IEnumerable<string>>()))
+                .Returns((IEnumerable<string> paths) => paths.ToList());
+            var service = new ModMergeService(preferencesService.Object, null, compressExporter.Object, new Cache(), messageBus.Object, modPatchExporter.Object,
+                modMergeExporter.Object, [infoProvider.Object], reader.Object, modWriter.Object, modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
+
+            var exception = await Assert.ThrowsAsync<MergeCompressArchiveUnavailableException>(() => service.MergeCompressCollectionAsync("collection", "merged"));
+
+            exception.ArchiveNames.Should().BeEquivalentTo("merged_one.zip", "merged_two.zip");
+            modWriter.Verify(p => p.PurgeModDirectoryAsync(It.IsAny<ModWriterParameters>(), It.IsAny<bool>()), Times.Never);
+            compressExporter.Verify(p => p.Finalize(It.IsAny<long>(), It.IsAny<string>()), Times.Never);
+        }
+
         /// <summary>
         /// Defines the test method Should_not_create_file_merge_mod_due_to_no_game_set.
         /// </summary>
@@ -67,7 +197,7 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(null, null, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.MergeCollectionByFilesAsync("test");
 
@@ -96,7 +226,7 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(null, null, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.MergeCollectionByFilesAsync(string.Empty);
 
@@ -133,7 +263,7 @@ namespace IronyModManager.Services.Tests
             });
             var fileInfos = new List<IFileInfo> { new FileInfo { Content = new List<string> { "a" }, FileName = "fakemod.mod", IsBinary = false } };
             reader.Setup(s => s.Read(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<bool>())).Returns(fileInfos);
-            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>())).Returns((IEnumerable<string> values, DescriptorModType t) =>
+            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>(), It.IsAny<ModParserArgs>())).Returns((IEnumerable<string> values, DescriptorModType t, ModParserArgs a) =>
             {
                 return new ModObject { FileName = values.First(), Name = values.First() };
             });
@@ -148,7 +278,7 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(null, null, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.MergeCollectionByFilesAsync("test");
 
@@ -177,7 +307,7 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(null, null, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.MergeCompressCollectionAsync("test", "test");
 
@@ -206,7 +336,7 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(null, null, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.MergeCompressCollectionAsync(string.Empty, "test");
 
@@ -238,8 +368,15 @@ namespace IronyModManager.Services.Tests
             preferencesService.Setup(p => p.Get()).Returns(() =>
                 new Preferences { MergeCollectionModNameTemplate = null });
             var isValid = false;
+            List<string> preflightPaths = null;
+            string exportPath = null;
 
             compressExporter.Setup(p => p.Start()).Returns(1);
+            compressExporter.Setup(p => p.GetUnavailableArchivePaths(It.IsAny<IEnumerable<string>>())).Returns((IEnumerable<string> paths) =>
+            {
+                preflightPaths = paths.ToList();
+                return [];
+            });
             compressExporter.Setup(p => p.AddFile(It.IsAny<ModMergeCompressExporterParameters>())).Callback((ModMergeCompressExporterParameters p) =>
             {
                 if (p.QueueId.Equals(1) && p.FileName.Equals("descriptor.mod"))
@@ -247,7 +384,11 @@ namespace IronyModManager.Services.Tests
                     isValid = true;
                 }
             });
-            compressExporter.Setup(p => p.Finalize(It.IsAny<long>(), It.IsAny<string>())).Returns(true);
+            compressExporter.Setup(p => p.Finalize(It.IsAny<long>(), It.IsAny<string>())).Returns((long _, string path) =>
+            {
+                exportPath = path;
+                return true;
+            });
             gameService.Setup(p => p.GetSelected()).Returns(new Game { Type = "Should_create_file_merge_mod", UserDirectory = "C:\\Users\\Fake", WorkshopDirectory = new List<string> { "C:\\fake" }, CustomModDirectory = string.Empty });
             var collections = new List<IModCollection> { new ModCollection { IsSelected = true, Mods = new List<string> { "mod/fakemod.mod" }, Name = "test", Game = "Should_create_file_merge_mod" } };
             storageProvider.Setup(s => s.GetModCollections()).Returns(() =>
@@ -256,7 +397,7 @@ namespace IronyModManager.Services.Tests
             });
             var fileInfos = new List<IFileInfo> { new FileInfo { Content = new List<string> { "a" }, FileName = "fakemod.mod", IsBinary = false } };
             reader.Setup(s => s.Read(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<bool>())).Returns(fileInfos);
-            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>())).Returns((IEnumerable<string> values, DescriptorModType t) =>
+            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>(), It.IsAny<ModParserArgs>())).Returns((IEnumerable<string> values, DescriptorModType t, ModParserArgs a) =>
             {
                 return new ModObject { FileName = values.First(), Name = values.First() };
             });
@@ -273,19 +414,22 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(preferencesService.Object, null, compressExporter.Object, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.MergeCompressCollectionAsync("test", "test");
 
             result.Should().NotBeNull();
             result.Count().Should().Be(1);
             isValid.Should().BeTrue();
+            preflightPaths.Should().ContainSingle();
+            preflightPaths.Single().Should().Be(exportPath);
+            Path.GetFileName(exportPath).Should().Be("test_a.zip");
         }
 
         /// <summary>
         /// Shoulds a create merge compress mods with template.
         /// </summary>
-        /// <returns>A Task.<see cref="Task"/></returns>
+        /// <returns>A Task.<see cref="Task" /></returns>
         [Fact]
         public async Task Should_create_merge_compress_mods_with_template()
         {
@@ -306,10 +450,17 @@ namespace IronyModManager.Services.Tests
             var compressExporter = new Mock<IModMergeCompressExporter>();
             var preferencesService = new Mock<IPreferencesService>();
             preferencesService.Setup(p => p.Get()).Returns(() =>
-                new Preferences { MergeCollectionModNameTemplate = "{Name} test {Merged}" });
+                new Preferences { MergedCollectionNameTemplate = "{Name} test {Merged}" });
             var isValid = false;
+            List<string> preflightPaths = null;
+            string exportPath = null;
 
             compressExporter.Setup(p => p.Start()).Returns(1);
+            compressExporter.Setup(p => p.GetUnavailableArchivePaths(It.IsAny<IEnumerable<string>>())).Returns((IEnumerable<string> paths) =>
+            {
+                preflightPaths = paths.ToList();
+                return [];
+            });
             compressExporter.Setup(p => p.AddFile(It.IsAny<ModMergeCompressExporterParameters>())).Callback((ModMergeCompressExporterParameters p) =>
             {
                 if (p.QueueId.Equals(1) && p.FileName.Equals("descriptor.mod"))
@@ -317,8 +468,12 @@ namespace IronyModManager.Services.Tests
                     isValid = true;
                 }
             });
-            compressExporter.Setup(p => p.Finalize(It.IsAny<long>(), It.IsAny<string>())).Returns(true);
-            gameService.Setup(p => p.GetSelected()).Returns(new Game { Type = "Should_create_file_merge_mod", UserDirectory = "C:\\Users\\Fake", WorkshopDirectory = new List<string> { "C:\\fake" }, CustomModDirectory = string.Empty });
+            compressExporter.Setup(p => p.Finalize(It.IsAny<long>(), It.IsAny<string>())).Returns((long _, string path) =>
+            {
+                exportPath = path;
+                return true;
+            });
+            gameService.Setup(p => p.GetSelected()).Returns(new Game { Type = "Should_create_file_merge_mod", UserDirectory = "C:\\Users\\Fake", WorkshopDirectory = new List<string> { "C:\\fake" }, CustomModDirectory = "C:\\CustomMods" });
             var collections = new List<IModCollection> { new ModCollection { IsSelected = true, Mods = new List<string> { "mod/fakemod.mod" }, Name = "test", Game = "Should_create_file_merge_mod" } };
             storageProvider.Setup(s => s.GetModCollections()).Returns(() =>
             {
@@ -326,7 +481,7 @@ namespace IronyModManager.Services.Tests
             });
             var fileInfos = new List<IFileInfo> { new FileInfo { Content = new List<string> { "a" }, FileName = "fakemod.mod", IsBinary = false } };
             reader.Setup(s => s.Read(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<bool>())).Returns(fileInfos);
-            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>())).Returns((IEnumerable<string> values, DescriptorModType t) =>
+            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>(), It.IsAny<ModParserArgs>())).Returns((IEnumerable<string> values, DescriptorModType t, ModParserArgs a) =>
             {
                 return new ModObject { FileName = values.First(), Name = values.First() };
             });
@@ -343,13 +498,17 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(preferencesService.Object, null, compressExporter.Object, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.MergeCompressCollectionAsync("test", "test");
 
             result.Should().NotBeNull();
             result.Count().Should().Be(1);
             isValid.Should().BeTrue();
+            preflightPaths.Should().ContainSingle();
+            preflightPaths.Single().Should().Be(exportPath);
+            Path.GetFileName(exportPath).Should().Be("a_test_test.zip");
+            exportPath.Should().StartWith("C:\\CustomMods");
         }
 
         /// <summary>
@@ -374,7 +533,7 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(null, null, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.HasEnoughFreeSpaceAsync("test");
 
@@ -401,15 +560,12 @@ namespace IronyModManager.Services.Tests
             var infoProvider = new Mock<IDefinitionInfoProvider>();
             gameService.Setup(p => p.GetSelected()).Returns(new Game
             {
-                Type = "Should_not_have_free_space_due_to_no_collection_name",
-                UserDirectory = "C:\\Users\\Fake",
-                WorkshopDirectory = new List<string> { "C:\\fake" },
-                CustomModDirectory = string.Empty
+                Type = "Should_not_have_free_space_due_to_no_collection_name", UserDirectory = "C:\\Users\\Fake", WorkshopDirectory = new List<string> { "C:\\fake" }, CustomModDirectory = string.Empty
             });
 
             var service = new ModMergeService(null, null, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.HasEnoughFreeSpaceAsync(string.Empty);
 
@@ -436,15 +592,12 @@ namespace IronyModManager.Services.Tests
             var infoProvider = new Mock<IDefinitionInfoProvider>();
             gameService.Setup(p => p.GetSelected()).Returns(new Game
             {
-                Type = "Should_not_have_free_space_due_to_no_mods",
-                UserDirectory = "C:\\Users\\Fake",
-                WorkshopDirectory = new List<string> { "C:\\fake" },
-                CustomModDirectory = string.Empty
+                Type = "Should_not_have_free_space_due_to_no_mods", UserDirectory = "C:\\Users\\Fake", WorkshopDirectory = new List<string> { "C:\\fake" }, CustomModDirectory = string.Empty
             });
 
             var service = new ModMergeService(null, null, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.HasEnoughFreeSpaceAsync("test");
 
@@ -476,10 +629,7 @@ namespace IronyModManager.Services.Tests
             modMergeExporter.Setup(p => p.ExportFilesAsync(It.IsAny<ModMergeFileExporterParameters>())).Returns(Task.FromResult(true));
             gameService.Setup(p => p.GetSelected()).Returns(new Game
             {
-                Type = "Should_have_free_space_to_create_merge_mod",
-                UserDirectory = "C:\\Users\\Fake",
-                WorkshopDirectory = new List<string> { "C:\\fake" },
-                CustomModDirectory = string.Empty
+                Type = "Should_have_free_space_to_create_merge_mod", UserDirectory = "C:\\Users\\Fake", WorkshopDirectory = new List<string> { "C:\\fake" }, CustomModDirectory = string.Empty
             });
             var collections = new List<IModCollection> { new ModCollection { IsSelected = true, Mods = new List<string> { "mod/fakemod.mod" }, Name = "test", Game = "Should_have_free_space_to_create_merge_mod" } };
             storageProvider.Setup(s => s.GetModCollections()).Returns(() =>
@@ -488,7 +638,7 @@ namespace IronyModManager.Services.Tests
             });
             var fileInfos = new List<IFileInfo> { new FileInfo { Content = new List<string> { "a" }, FileName = "fakemod.mod", IsBinary = false } };
             reader.Setup(s => s.Read(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<bool>())).Returns(fileInfos);
-            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>())).Returns((IEnumerable<string> values, DescriptorModType t) =>
+            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>(), It.IsAny<ModParserArgs>())).Returns((IEnumerable<string> values, DescriptorModType t, ModParserArgs a) =>
             {
                 return new ModObject { FileName = values.First(), Name = values.First() };
             });
@@ -504,7 +654,7 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(null, diskInfoProvider.Object, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.HasEnoughFreeSpaceAsync("test");
 
@@ -536,10 +686,7 @@ namespace IronyModManager.Services.Tests
             modMergeExporter.Setup(p => p.ExportFilesAsync(It.IsAny<ModMergeFileExporterParameters>())).Returns(Task.FromResult(true));
             gameService.Setup(p => p.GetSelected()).Returns(new Game
             {
-                Type = "Should_not_have_free_space_to_create_merge_mod",
-                UserDirectory = "C:\\Users\\Fake",
-                WorkshopDirectory = new List<string> { "C:\\fake" },
-                CustomModDirectory = string.Empty
+                Type = "Should_not_have_free_space_to_create_merge_mod", UserDirectory = "C:\\Users\\Fake", WorkshopDirectory = new List<string> { "C:\\fake" }, CustomModDirectory = string.Empty
             });
             var collections = new List<IModCollection> { new ModCollection { IsSelected = true, Mods = new List<string> { "mod/fakemod.mod" }, Name = "test", Game = "Should_not_have_free_space_to_create_merge_mod" } };
             storageProvider.Setup(s => s.GetModCollections()).Returns(() =>
@@ -548,7 +695,7 @@ namespace IronyModManager.Services.Tests
             });
             var fileInfos = new List<IFileInfo> { new FileInfo { Content = new List<string> { "a" }, FileName = "fakemod.mod", IsBinary = false } };
             reader.Setup(s => s.Read(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<bool>())).Returns(fileInfos);
-            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>())).Returns((IEnumerable<string> values, DescriptorModType t) =>
+            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>(), It.IsAny<ModParserArgs>())).Returns((IEnumerable<string> values, DescriptorModType t, ModParserArgs a) =>
             {
                 return new ModObject { FileName = values.First(), Name = values.First() };
             });
@@ -564,7 +711,7 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(null, diskInfoProvider.Object, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.HasEnoughFreeSpaceAsync("test");
 
@@ -593,7 +740,7 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(null, null, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.AllowModMergeAsync("test");
 
@@ -620,15 +767,12 @@ namespace IronyModManager.Services.Tests
             var infoProvider = new Mock<IDefinitionInfoProvider>();
             gameService.Setup(p => p.GetSelected()).Returns(new Game
             {
-                Type = "Should_not_allow_merge_when_no_collection_name",
-                UserDirectory = "C:\\Users\\Fake",
-                WorkshopDirectory = new List<string> { "C:\\fake" },
-                CustomModDirectory = string.Empty
+                Type = "Should_not_allow_merge_when_no_collection_name", UserDirectory = "C:\\Users\\Fake", WorkshopDirectory = new List<string> { "C:\\fake" }, CustomModDirectory = string.Empty
             });
 
             var service = new ModMergeService(null, null, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.AllowModMergeAsync(string.Empty);
 
@@ -655,15 +799,12 @@ namespace IronyModManager.Services.Tests
             var infoProvider = new Mock<IDefinitionInfoProvider>();
             gameService.Setup(p => p.GetSelected()).Returns(new Game
             {
-                Type = "Should_not_allow_merge_when_no_collection_mods",
-                UserDirectory = "C:\\Users\\Fake",
-                WorkshopDirectory = new List<string> { "C:\\fake" },
-                CustomModDirectory = string.Empty
+                Type = "Should_not_allow_merge_when_no_collection_mods", UserDirectory = "C:\\Users\\Fake", WorkshopDirectory = new List<string> { "C:\\fake" }, CustomModDirectory = string.Empty
             });
 
             var service = new ModMergeService(null, null, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.AllowModMergeAsync("test");
 
@@ -701,7 +842,7 @@ namespace IronyModManager.Services.Tests
             });
             var fileInfos = new List<IFileInfo> { new FileInfo { Content = new List<string> { "a" }, FileName = "fakemod.mod", IsBinary = false } };
             reader.Setup(s => s.Read(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<bool>())).Returns(fileInfos);
-            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>())).Returns((IEnumerable<string> values, DescriptorModType t) =>
+            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>(), It.IsAny<ModParserArgs>())).Returns((IEnumerable<string> values, DescriptorModType t, ModParserArgs a) =>
             {
                 return new ModObject { FileName = values.First(), Name = values.First() };
             });
@@ -717,7 +858,7 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(null, diskInfoProvider.Object, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.AllowModMergeAsync("test");
 
@@ -755,7 +896,7 @@ namespace IronyModManager.Services.Tests
             });
             var fileInfos = new List<IFileInfo> { new FileInfo { Content = new List<string> { "a" }, FileName = "fakemod.mod", IsBinary = false } };
             reader.Setup(s => s.Read(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<bool>())).Returns(fileInfos);
-            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>())).Returns((IEnumerable<string> values, DescriptorModType t) =>
+            modParser.Setup(s => s.Parse(It.IsAny<IEnumerable<string>>(), It.IsAny<DescriptorModType>(), It.IsAny<ModParserArgs>())).Returns((IEnumerable<string> values, DescriptorModType t, ModParserArgs a) =>
             {
                 return new ModObject { FileName = values.First(), Name = values.First() };
             });
@@ -771,7 +912,7 @@ namespace IronyModManager.Services.Tests
 
             var service = new ModMergeService(null, diskInfoProvider.Object, null, new Cache(), messageBus.Object, modPatchExporter.Object, modMergeExporter.Object,
                 new List<IDefinitionInfoProvider> { infoProvider.Object }, reader.Object, modWriter.Object,
-                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object);
+                modParser.Object, gameService.Object, storageProvider.Object, mapper.Object, Mock.Of<IGameStateSafetyService>());
 
             var result = await service.AllowModMergeAsync("test");
 
@@ -788,7 +929,7 @@ namespace IronyModManager.Services.Tests
             preferencesService.Setup(p => p.Get()).Returns(() =>
                 new Preferences { MergeCollectionModNameTemplate = "{Name} test {Merged}" });
 
-            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null, Mock.Of<IGameStateSafetyService>());
             var result = service.GetMergeCollectionNameTemplate();
             result.Should().Be("{Name} test {Merged}");
         }
@@ -803,7 +944,7 @@ namespace IronyModManager.Services.Tests
             preferencesService.Setup(p => p.Get()).Returns(() =>
                 new Preferences { MergedCollectionNameTemplate = "{lame} test" });
 
-            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null, Mock.Of<IGameStateSafetyService>());
             var result = service.GetMergeCollectionNameTemplate();
             result.Should().BeNullOrWhiteSpace();
         }
@@ -818,7 +959,7 @@ namespace IronyModManager.Services.Tests
             preferencesService.Setup(p => p.Get()).Returns(() =>
                 new Preferences { MergedCollectionNameTemplate = "{Name} test {Merged}" });
 
-            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null, Mock.Of<IGameStateSafetyService>());
             var result = service.GetMergeCollectionModNameTemplate();
             result.Should().Be("{Name} test {Merged}");
         }
@@ -833,7 +974,7 @@ namespace IronyModManager.Services.Tests
             preferencesService.Setup(p => p.Get()).Returns(() =>
                 new Preferences { MergedCollectionNameTemplate = "{lame} test" });
 
-            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null, Mock.Of<IGameStateSafetyService>());
             var result = service.GetMergeCollectionModNameTemplate();
             result.Should().BeNullOrWhiteSpace();
         }
@@ -850,7 +991,7 @@ namespace IronyModManager.Services.Tests
                 new Preferences { MergedCollectionNameTemplate = "{Name} test {Merged}" });
             preferencesService.Setup(p => p.Save(It.IsAny<IPreferences>())).Returns((IPreferences saved) => true);
 
-            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null, Mock.Of<IGameStateSafetyService>());
             var result = service.SaveMergedCollectionNameTemplate("{Name} test {Merged}");
             result.Should().BeTrue();
         }
@@ -866,7 +1007,7 @@ namespace IronyModManager.Services.Tests
                 new Preferences { MergedCollectionNameTemplate = "{lame} test" });
             preferencesService.Setup(p => p.Save(It.IsAny<IPreferences>())).Returns((IPreferences saved) => false);
 
-            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null, Mock.Of<IGameStateSafetyService>());
             var result = service.SaveMergedCollectionNameTemplate("{lame} test");
             result.Should().BeFalse();
         }
@@ -883,7 +1024,7 @@ namespace IronyModManager.Services.Tests
                 new Preferences { MergedCollectionNameTemplate = "{Name} test" });
             preferencesService.Setup(p => p.Save(It.IsAny<IPreferences>())).Returns((IPreferences saved) => true);
 
-            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null, Mock.Of<IGameStateSafetyService>());
             var result = service.SaveMergeCollectionModNameTeplate("{Name} test {Merged}");
             result.Should().BeTrue();
         }
@@ -900,7 +1041,7 @@ namespace IronyModManager.Services.Tests
                 new Preferences { MergedCollectionNameTemplate = "{lame} test" });
             preferencesService.Setup(p => p.Save(It.IsAny<IPreferences>())).Returns((IPreferences saved) => false);
 
-            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            var service = new ModMergeService(preferencesService.Object, null, null, null, null, null, null, null, null, null, null, null, null, null, Mock.Of<IGameStateSafetyService>());
             var result = service.SaveMergeCollectionModNameTeplate("{lame} test");
             result.Should().BeFalse();
         }

@@ -4,7 +4,7 @@
 // Created          : 01-10-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 03-11-2024
+// Last Modified On : 05-20-2026
 // ***********************************************************************
 // <copyright file="MainWindow.xaml.cs" company="Mario">
 //     Mario
@@ -59,6 +59,21 @@ namespace IronyModManager.Views
         private Dictionary<string, KeyGesture> hotkeyGestures;
 
         /// <summary>
+        /// The old height
+        /// </summary>
+        private double? oldHeight;
+
+        /// <summary>
+        /// The old position
+        /// </summary>
+        private PixelPoint? oldPosition;
+
+        /// <summary>
+        /// The old width
+        /// </summary>
+        private double? oldWidth;
+
+        /// <summary>
         /// The prevention shutdown flag
         /// </summary>
         private bool preventShutdown;
@@ -101,32 +116,6 @@ namespace IronyModManager.Views
         #endregion Properties
 
         #region Methods
-
-        /// <summary>
-        /// Handles the <see cref="E:Closing" /> event.
-        /// </summary>
-        /// <param name="e">The <see cref="CancelEventArgs" /> instance containing the event data.</param>
-        /// <remarks>A type that derives from <see cref="T:Avalonia.Controls.Window" />  may override <see cref="M:Avalonia.Controls.Window.OnClosing(System.ComponentModel.CancelEventArgs)" />. The
-        /// overridden method must call <see cref="M:Avalonia.Controls.Window.OnClosing(System.ComponentModel.CancelEventArgs)" /> on the base class if the
-        /// <see cref="E:Avalonia.Controls.Window.Closing" /> event needs to be raised.</remarks>
-        protected override void OnClosing(CancelEventArgs e)
-        {
-            if (preventShutdown)
-            {
-                e.Cancel = true;
-                shutdownRequested = true;
-                var locManager = DIResolver.Get<ILocalizationManager>();
-                var message = locManager.GetResource(LocalizationResources.App.BackgroundOperationMessage);
-                var id = DIResolver.Get<IIDGenerator>().GetNextId();
-                ViewModel!.TriggerManualOverlay(id, true, message);
-            }
-            else
-            {
-                SaveWindowState();
-            }
-
-            base.OnClosing(e);
-        }
 
         /// <summary>
         /// Gets the enter key gestures.
@@ -195,14 +184,34 @@ namespace IronyModManager.Views
         /// <summary>
         /// Initializes the size of the window.
         /// </summary>
-        protected virtual void InitWindowSize()
+        /// <param name="initialLoad">if set to <c>true</c> [initial load].</param>
+        protected virtual void InitWindowSize(bool initialLoad = true)
         {
             var service = DIResolver.Get<IWindowStateService>();
             if (service.IsDefined() || service.IsMaximized())
             {
-                var oldPos = Position;
-                var oldHeight = Height;
-                var oldWidth = Width;
+                oldPosition ??= Position;
+                oldHeight ??= Height;
+                oldWidth ??= Width;
+
+                if (initialLoad)
+                {
+                    WindowState = WindowState.Normal;
+                    if (oldPosition.HasValue)
+                    {
+                        Position = oldPosition.GetValueOrDefault();
+                    }
+
+                    if (oldHeight.HasValue)
+                    {
+                        Height = oldHeight.GetValueOrDefault();
+                    }
+
+                    if (oldWidth.HasValue)
+                    {
+                        Width = oldWidth.GetValueOrDefault();
+                    }
+                }
 
                 static bool isValid(int value)
                 {
@@ -216,21 +225,27 @@ namespace IronyModManager.Views
                     {
                         Height = state.Height.GetValueOrDefault();
                     }
+                    else if (!isValid((int)Height))
+                    {
+                        Height = MinHeight + ExtendClientAreaTitleBarHeightHint > 0 ? ExtendClientAreaTitleBarHeightHint : 0;
+                    }
 
                     if (isValid(state.Width.GetValueOrDefault()))
                     {
                         Width = state.Width.GetValueOrDefault();
                     }
+                    else if (!isValid((int)Width))
+                    {
+                        Width = MinWidth;
+                    }
 
-                    WindowState = state.IsMaximized.GetValueOrDefault() ? WindowState.Maximized : WindowState.Normal;
-
-                    // Silly setup code isn't it?
+                    // Silly setup code, isn't it?
                     var pos = Position.WithX(state.LocationX.GetValueOrDefault());
                     pos = pos.WithY(state.LocationY.GetValueOrDefault());
-                    var activeScreen = Screens.ScreenFromPoint(pos);
+                    var activeScreen = Screens.ScreenFromPoint(pos) ?? Screens.Primary;
                     var totalScreenX = Screens.All.Sum(p => p.WorkingArea.Width);
                     var locX = state.LocationX.GetValueOrDefault() + state.Width.GetValueOrDefault() > totalScreenX ? totalScreenX - state.Width.GetValueOrDefault() : state.LocationX.GetValueOrDefault();
-                    var locY = state.LocationY.GetValueOrDefault() + state.Height.GetValueOrDefault() > activeScreen!.WorkingArea.Height
+                    var locY = state.LocationY.GetValueOrDefault() + state.Height.GetValueOrDefault() > activeScreen.WorkingArea.Height
                         ? activeScreen.WorkingArea.Height - state.Height.GetValueOrDefault()
                         : state.LocationY.GetValueOrDefault();
                     if (isValid(locX) && isValid(locY))
@@ -238,6 +253,11 @@ namespace IronyModManager.Views
                         pos = Position.WithX(locX);
                         pos = pos.WithY(locY);
                         Position = pos;
+                    }
+
+                    if (initialLoad)
+                    {
+                        WindowState = state.IsMaximized.GetValueOrDefault() ? WindowState.Maximized : WindowState.Normal;
                     }
                 }
                 catch (Exception ex)
@@ -248,9 +268,9 @@ namespace IronyModManager.Views
                     SizeToContent = SizeToContent.Manual;
                     WindowStartupLocation = WindowStartupLocation.CenterScreen;
                     WindowState = WindowState.Normal;
-                    Position = oldPos;
-                    Height = oldHeight;
-                    Width = oldWidth;
+                    Position = oldPosition.GetValueOrDefault();
+                    Height = oldHeight.GetValueOrDefault();
+                    Width = oldWidth.GetValueOrDefault();
                 }
             }
         }
@@ -324,6 +344,32 @@ namespace IronyModManager.Views
         }
 
         /// <summary>
+        /// Handles the <see cref="E:Closing" /> event.
+        /// </summary>
+        /// <param name="e">The <see cref="CancelEventArgs" /> instance containing the event data.</param>
+        /// <remarks>A type that derives from <see cref="T:Avalonia.Controls.Window" />  may override <see cref="M:Avalonia.Controls.Window.OnClosing(System.ComponentModel.CancelEventArgs)" />. The
+        /// overridden method must call <see cref="M:Avalonia.Controls.Window.OnClosing(System.ComponentModel.CancelEventArgs)" /> on the base class if the
+        /// <see cref="E:Avalonia.Controls.Window.Closing" /> event needs to be raised.</remarks>
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            if (preventShutdown)
+            {
+                e.Cancel = true;
+                shutdownRequested = true;
+                var locManager = DIResolver.Get<ILocalizationManager>();
+                var message = locManager.GetResource(LocalizationResources.App.BackgroundOperationMessage);
+                var id = DIResolver.Get<IIDGenerator>().GetNextId();
+                ViewModel!.TriggerManualOverlay(id, true, message);
+            }
+            else
+            {
+                SaveWindowState();
+            }
+
+            base.OnClosing(e);
+        }
+
+        /// <summary>
         /// Called when [property changed].
         /// </summary>
         /// <typeparam name="T"></typeparam>
@@ -333,6 +379,11 @@ namespace IronyModManager.Views
             base.OnPropertyChanged(change);
             if (change != null && change.Property == WindowStateProperty)
             {
+                if (change.OldValue.HasValue && change.OldValue.GetValueOrDefault(WindowState) == WindowState.Maximized)
+                {
+                    InitWindowSize(false);
+                }
+
                 if (WindowState != WindowState.Minimized)
                 {
                     ActualState = WindowState;
@@ -346,19 +397,29 @@ namespace IronyModManager.Views
         private void InitializeComponent()
         {
             AvaloniaXamlLoader.Load(this);
+
+            if (!Design.IsDesignMode)
+            {
+                Opened += async (_, _) =>
+                {
+                    await Dispatcher.UIThread.InvokeAsync(InitializeWindowState, DispatcherPriority.Loaded);
+                };
+            }
+
+            InitializeWindowState();
+        }
+
+        /// <summary>
+        /// Initializes the state of the window.
+        /// </summary>
+        private void InitializeWindowState()
+        {
             if (!Design.IsDesignMode)
             {
                 InitWindowSize();
             }
 
-            if (WindowState != WindowState.Minimized)
-            {
-                ActualState = WindowState;
-            }
-            else
-            {
-                ActualState = WindowState.Normal;
-            }
+            ActualState = WindowState != WindowState.Minimized ? WindowState : WindowState.Normal;
         }
 
         /// <summary>
@@ -388,7 +449,7 @@ namespace IronyModManager.Views
                     locY = 0;
                 }
 
-                state.Height = Convert.ToInt32(ClientSize.Height) - Convert.ToInt32(ExtendClientAreaTitleBarHeightHint);
+                state.Height = Convert.ToInt32(ClientSize.Height) - Convert.ToInt32(ExtendClientAreaTitleBarHeightHint > 0 ? ExtendClientAreaTitleBarHeightHint : 0);
                 state.Width = Convert.ToInt32(ClientSize.Width);
                 state.IsMaximized = false;
                 state.LocationX = Convert.ToInt32(locX);

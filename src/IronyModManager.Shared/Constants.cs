@@ -4,7 +4,7 @@
 // Created          : 01-17-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 10-01-2024
+// Last Modified On : 12-04-2025
 // ***********************************************************************
 // <copyright file="Constants.cs" company="Mario">
 //     Mario
@@ -70,7 +70,7 @@ namespace IronyModManager.Shared
         public const string JsonExtensionWithoutDot = "json";
 
         /// <summary>
-        /// The replace paths
+        /// The replacement paths constant.
         /// </summary>
         public const string JsonMetadataReplacePaths = "replace_paths";
 
@@ -142,14 +142,28 @@ namespace IronyModManager.Shared
         /// <summary>
         /// The image extensions
         /// </summary>
-        public static readonly string[] ImageExtensions = { ".gif", ".jpg", ".jpeg", ".png", ".dds", ".tga", ".bmp", ".tiff", ".tif" };
+        public static readonly string[] ImageExtensions = [".gif", ".jpg", ".jpeg", ".png", ".dds", ".tga", ".bmp", ".tiff", ".tif"];
 
         /// <summary>
         /// The text extensions
         /// </summary>
-        public static readonly string[] TextExtensions = { ".lua", ".txt", ".asset", ".gui", ".gfx", ".yml", ".csv", ".shader", ".fxh", ".mod", ".sfx", ".json" };
+        public static readonly string[] TextExtensions = [".lua", ".txt", ".asset", ".gui", ".gfx", ".yml", ".csv", ".shader", ".fxh", ".mod", ".sfx", ".json"];
 
         #endregion Fields
+
+        #region Methods
+
+        /// <summary>
+        /// Merges the path.
+        /// </summary>
+        /// <param name="paths">The paths.</param>
+        /// <returns>System.String.</returns>
+        private static string MergePath(params string[] paths)
+        {
+            return string.Join(Path.DirectorySeparatorChar, paths);
+        }
+
+        #endregion Methods
 
         #region Classes
 
@@ -195,7 +209,7 @@ namespace IronyModManager.Shared
                 /// <summary>
                 /// The map
                 /// </summary>
-                public static readonly string[] Map = { ColonSign };
+                public static readonly string[] Map = [ColonSign];
 
                 #endregion Fields
             }
@@ -211,6 +225,11 @@ namespace IronyModManager.Shared
             #region Fields
 
             /// <summary>
+            /// The default game binary path
+            /// </summary>
+            public static readonly string DefaultGameBinaryPath = string.Empty;
+
+            /// <summary>
             /// The DLC container
             /// </summary>
             public static readonly string DLCContainer = string.Empty;
@@ -224,6 +243,11 @@ namespace IronyModManager.Shared
             /// The log location
             /// </summary>
             public static readonly string LogLocation = "logs" + Path.DirectorySeparatorChar + "error.log";
+
+            /// <summary>
+            /// The signature files
+            /// </summary>
+            public static readonly string[] SignatureFiles = [];
 
             #endregion Fields
 
@@ -259,7 +283,7 @@ namespace IronyModManager.Shared
                 /// <summary>
                 /// The checksum folders
                 /// </summary>
-                public static readonly string[] ChecksumFolders = { "common", "events", "history", "map_data", "gui", "localization", "data_binding" };
+                public static readonly string[] ChecksumFolders = ["common", "events", "history", "map_data", "gui", "localization", "data_binding"];
 
                 /// <summary>
                 /// The DLC container
@@ -271,7 +295,7 @@ namespace IronyModManager.Shared
                 /// </summary>
                 public static readonly string[] GameFolders =
                 [
-                    "common", "content_source", "data_binding", "dlc", "dlc_metadata", "events", "fonts", "gfx", "gui", "history", "licenses", "localization", "map_data", "music", "notifications", "sound", "tests", "tools",
+                    "common", "content_source", "data_binding", "dlc", "dlc_metadata", "events", "fonts", "fx", "gfx", "gui", "history", "licenses", "localization", "map_data", "music", "notifications", "sound", "tests", "tools",
                     "tweakergui_assets", "reader_export"
                 ];
 
@@ -323,20 +347,98 @@ namespace IronyModManager.Shared
                 /// <summary>
                 /// The checksum folders
                 /// </summary>
-                public static readonly string[] ChecksumFolders = { "common", "events", "missions", "decisions", "history", "map" };
+                public static readonly string[] ChecksumFolders = ["common", "events", "missions", "decisions", "history", "map"];
 
                 /// <summary>
                 /// The game folders
                 /// </summary>
                 public static readonly string[] GameFolders =
-                {
+                [
                     "common", "customizable_localization", "decisions", "events", "gfx", "hints", "history", "interface", "localisation", "map", "missions", "music", "sound", "tutorial", "tweakergui_assets"
-                };
+                ];
 
                 /// <summary>
                 /// The paradox game identifier
                 /// </summary>
                 public static readonly string ParadoxGameId = "eu4";
+
+                #endregion Fields
+            }
+
+            /// <summary>
+            /// Class EuropaUniversalis5.
+            /// </summary>
+            public static class EuropaUniversalis5
+            {
+                #region Fields
+
+                /// <summary>
+                /// The abrv
+                /// </summary>
+                public const string Abrv = "EU5";
+
+                /// <summary>
+                /// The docs path
+                /// </summary>
+                public const string DocsPath = "Europa Universalis V";
+
+                /// <summary>
+                /// The identifier
+                /// </summary>
+                public const string Id = "EuropaUniversalisV";
+
+                /// <summary>
+                /// The steam application identifier
+                /// </summary>
+                public const int SteamAppId = 3450310;
+
+                /// <summary>
+                /// The checksum folders
+                /// </summary>
+                public static readonly string[] ChecksumFolders =
+                [
+                    MergePath("in_game", "common"), MergePath("in_game", "events"),
+                    MergePath("in_game", "map_data"), MergePath("in_game", "setup"),
+                    MergePath("in_game", "gui"), MergePath("main_menu", "localization")
+                ];
+
+                /// <summary>
+                /// The default Windows game binary path
+                /// </summary>
+                public static readonly string DefaultWindowsGameBinaryPath = MergePath("binaries", "eu5.exe");
+
+                /// <summary>
+                /// The DLC container
+                /// </summary>
+                public static readonly string DLCContainer = "game";
+
+                /// <summary>
+                /// The game folders
+                /// </summary>
+                public static readonly string[] GameFolders =
+                [
+                    "mod", "in_game", "loading_screen", "main_menu"
+                ];
+
+                /// <summary>
+                /// The launcher settings file name
+                /// </summary>
+                public static readonly string LauncherSettingsFileName = string.Empty;
+
+                /// <summary>
+                /// The launcher settings prefix
+                /// </summary>
+                public static readonly string LauncherSettingsPrefix = string.Empty;
+
+                /// <summary>
+                /// The paradox game identifier
+                /// </summary>
+                public static readonly string ParadoxGameId = string.Empty;
+
+                /// <summary>
+                /// The signature files
+                /// </summary>
+                public static readonly string[] SignatureFiles = ["caesar_branch.txt", "clausewitz_branch.txt"];
 
                 #endregion Fields
             }
@@ -371,12 +473,12 @@ namespace IronyModManager.Shared
                 /// <summary>
                 /// The checksum folders
                 /// </summary>
-                public static readonly string[] ChecksumFolders = { "common", "events", "history", "map" };
+                public static readonly string[] ChecksumFolders = ["common", "events", "history", "map"];
 
                 /// <summary>
                 /// The game folders
                 /// </summary>
-                public static readonly string[] GameFolders = { "common", "events", "gfx", "history", "interface", "localisation", "map", "music", "portraits", "previewer_assets", "script", "sound", "tutorial", "tweakergui_assets" };
+                public static readonly string[] GameFolders = ["common", "events", "gfx", "history", "interface", "localisation", "map", "music", "portraits", "previewer_assets", "script", "sound", "tutorial", "tweakergui_assets"];
 
                 /// <summary>
                 /// The paradox game identifier
@@ -421,7 +523,7 @@ namespace IronyModManager.Shared
                 /// <summary>
                 /// The checksum folders
                 /// </summary>
-                public static readonly string[] ChecksumFolders = { "common", "events", "decisions", "gui", "localization", "map_data", "setup" };
+                public static readonly string[] ChecksumFolders = ["common", "events", "decisions", "gui", "localization", "map_data", "setup"];
 
                 /// <summary>
                 /// The DLC container
@@ -431,7 +533,7 @@ namespace IronyModManager.Shared
                 /// <summary>
                 /// The game folders
                 /// </summary>
-                public static readonly string[] GameFolders = { "common", "content_source", "decisions", "events", "fonts", "gfx", "gui", "localization", "map_data", "music", "setup", "sound", "tutorial", "tweakergui_assets" };
+                public static readonly string[] GameFolders = ["common", "content_source", "decisions", "events", "fonts", "gfx", "gui", "localization", "map_data", "music", "setup", "sound", "tutorial", "tweakergui_assets"];
 
                 /// <summary>
                 /// The launcher settings file name
@@ -486,16 +588,16 @@ namespace IronyModManager.Shared
                 /// <summary>
                 /// The checksum folders
                 /// </summary>
-                public static readonly string[] ChecksumFolders = { "common", "events", "map", "localisation_synced" };
+                public static readonly string[] ChecksumFolders = ["common", "events", "map", "localisation_synced"];
 
                 /// <summary>
                 /// The game folders
                 /// </summary>
                 public static readonly string[] GameFolders =
-                {
+                [
                     "pdx_launcher", "pdx_online_assets", "prescripted_countries", "previewer_assets", "sound", "tools", "tweakergui_assets", "unchecked_defines", "common", "crash_reporter", "curated_save_games", "dlc", "dlc_metadata",
                     "events", "flags", "fonts", "gfx", "interface", "launcher-assets", "licenses", "locales", "localisation", "map", "music", "pdx_browser"
-                };
+                ];
 
                 /// <summary>
                 /// The paradox game identifier
@@ -535,16 +637,16 @@ namespace IronyModManager.Shared
                 /// <summary>
                 /// The checksum folders
                 /// </summary>
-                public static readonly string[] ChecksumFolders = { "common", "events", "map", "localisation_synced" };
+                public static readonly string[] ChecksumFolders = ["common", "events", "map", "localisation_synced"];
 
                 /// <summary>
                 /// The game folders
                 /// </summary>
                 public static readonly string[] GameFolders =
-                {
+                [
                     "common", "crash_reporter", "dlc", "dlc_metadata", "events", "flags", "fonts", "gfx", "interface", "launcher-assets", "licenses", "locales", "localisation", "localisation_synced", "map", "music", "pdx_launcher",
                     "pdx_online_assets", "prescripted_countries", "previewer_assets", "sound", "tools", "tweakergui_assets"
-                };
+                ];
 
                 /// <summary>
                 /// The paradox game identifier

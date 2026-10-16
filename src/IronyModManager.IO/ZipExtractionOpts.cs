@@ -4,16 +4,18 @@
 // Created          : 09-17-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 09-17-2020
+// Last Modified On : 05-12-2026
 // ***********************************************************************
 // <copyright file="ZipExtractionOpts.cs" company="Mario">
 //     Mario
 // </copyright>
 // <summary></summary>
 // ***********************************************************************
-using System.Collections.Generic;
+
 using System;
-using SharpCompress.Common;
+using System.IO;
+using IronyModManager.Shared;
+using Ionic.Zip;
 
 namespace IronyModManager.IO
 {
@@ -25,30 +27,66 @@ namespace IronyModManager.IO
         #region Fields
 
         /// <summary>
-        /// The extraction options
+        /// The safe path comparison
         /// </summary>
-        private static ExtractionOptions extractionOptions;
+        private static readonly StringComparison safePathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
         #endregion Fields
 
         #region Methods
 
         /// <summary>
-        /// Gets the extraction options.
+        /// Extracts the entry to the specified file.
         /// </summary>
-        /// <returns>ExtractionOptions.</returns>
-        public static ExtractionOptions GetExtractionOptions()
+        /// <param name="entry">The entry.</param>
+        /// <param name="destinationFile">The destination file.</param>
+        public static void ExtractEntryToFile(ZipEntry entry, string destinationFile)
         {
-            if (extractionOptions == null)
+            using var output = new FileStream(destinationFile, FileMode.Create, FileAccess.Write, FileShare.None);
+            entry.Extract(output);
+            output.Close();
+            File.SetLastWriteTime(destinationFile, entry.LastModified);
+        }
+
+        /// <summary>
+        /// Sanitizes the archive path.
+        /// </summary>
+        /// <param name="path">The path.</param>
+        /// <returns>System.String.</returns>
+        /// <exception cref="System.InvalidOperationException">Archive entry path is empty.</exception>
+        /// <exception cref="System.InvalidOperationException">Rooted archive path is not allowed: {path}</exception>
+        /// <exception cref="System.InvalidOperationException">Archive entry contains path traversal: {path}</exception>
+        public static string SanitizeArchivePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
             {
-                extractionOptions = new ExtractionOptions()
-                {
-                    ExtractFullPath = true,
-                    Overwrite = true,
-                    PreserveFileTime = true
-                };
+                throw new InvalidOperationException("Archive entry path is empty.");
             }
-            return extractionOptions;
+
+            path = path.StandardizeDirectorySeparator();
+
+            path = path.Trim(Path.DirectorySeparatorChar);
+
+            if (Path.IsPathRooted(path))
+            {
+                throw new InvalidOperationException($"Rooted archive path is not allowed: {path}");
+            }
+
+            var normalized = Path.GetFullPath(Path.Combine(Path.GetTempPath(), path));
+
+            var expectedRoot = Path.GetFullPath(Path.GetTempPath());
+
+            if (!expectedRoot.EndsWith(Path.DirectorySeparatorChar))
+            {
+                expectedRoot += Path.DirectorySeparatorChar;
+            }
+
+            if (!normalized.StartsWith(expectedRoot, safePathComparison))
+            {
+                throw new InvalidOperationException($"Archive entry contains path traversal: {path}");
+            }
+
+            return path;
         }
 
         #endregion Methods

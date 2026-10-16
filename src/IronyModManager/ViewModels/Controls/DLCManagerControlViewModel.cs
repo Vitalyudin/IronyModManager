@@ -4,7 +4,7 @@
 // Created          : 02-15-2021
 //
 // Last Modified By : Mario
-// Last Modified On : 03-09-2025
+// Last Modified On : 12-03-2025
 // ***********************************************************************
 // <copyright file="DLCManagerControlViewModel.cs" company="Mario">
 //     Mario
@@ -48,6 +48,11 @@ namespace IronyModManager.ViewModels.Controls
         private readonly IGameService gameService;
 
         /// <summary>
+        /// The per-game filesystem safety state.
+        /// </summary>
+        private readonly IGameStateSafetyService gameStateSafetyService;
+
+        /// <summary>
         /// The selected game
         /// </summary>
         private IGame selectedGame;
@@ -61,15 +66,22 @@ namespace IronyModManager.ViewModels.Controls
         /// </summary>
         /// <param name="dlcService">The DLC service.</param>
         /// <param name="gameService">The game service.</param>
-        public DLCManagerControlViewModel(IDLCService dlcService, IGameService gameService)
+        public DLCManagerControlViewModel(IDLCService dlcService, IGameService gameService, IGameStateSafetyService gameStateSafetyService)
         {
             this.dlcService = dlcService;
             this.gameService = gameService;
+            this.gameStateSafetyService = gameStateSafetyService;
         }
 
         #endregion Constructors
 
         #region Properties
+
+        /// <summary>
+        /// Gets or sets all DLC.
+        /// </summary>
+        /// <value>All DLC.</value>
+        public virtual IReadOnlyCollection<IDLC> AllDLC { get; set; }
 
         /// <summary>
         /// Gets or sets the close.
@@ -139,7 +151,13 @@ namespace IronyModManager.ViewModels.Controls
             selectedGame = game;
             var dlc = await dlcService.GetAsync(selectedGame);
             await dlcService.SyncStateAsync(selectedGame, dlc);
-            DLC = dlc?.OrderBy(p => p.Name).ToList();
+            if (gameStateSafetyService.IsLocked(selectedGame))
+            {
+                return;
+            }
+
+            AllDLC = dlc?.OrderBy(p => p.Name).ToList();
+            DLC = AllDLC?.Where(p => p.IsVisible).ToList();
         }
 
         /// <summary>
@@ -156,7 +174,7 @@ namespace IronyModManager.ViewModels.Controls
 
             ToggleDLCCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                if (DLC != null && DLC.Count() != 0)
+                if (DLC != null && DLC.Count != 0)
                 {
                     var isEnabled = !DLC.All(p => p.IsEnabled);
                     foreach (var dlc in DLC)
@@ -181,7 +199,7 @@ namespace IronyModManager.ViewModels.Controls
         {
             if (game != null && selectedGame != null && game.Type.Equals(selectedGame.Type))
             {
-                await dlcService.ExportAsync(gameService.GetSelected(), DLC);
+                await dlcService.ExportAsync(gameService.GetSelected(), AllDLC);
             }
         }
 

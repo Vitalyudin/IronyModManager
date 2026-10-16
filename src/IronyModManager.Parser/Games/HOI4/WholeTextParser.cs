@@ -4,7 +4,7 @@
 // Created          : 02-18-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 02-12-2025
+// Last Modified On : 06-16-2026
 // ***********************************************************************
 // <copyright file="WholeTextParser.cs" company="Mario">
 //     Mario
@@ -38,6 +38,11 @@ namespace IronyModManager.Parser.Games.HOI4
         private static readonly string[] equalsChecks = [Common.Constants.HOI4.GraphicalCultureType];
 
         /// <summary>
+        /// The extension checks
+        /// </summary>
+        private static readonly string[] extensionChecks = [Common.Constants.JsonExtension];
+
+        /// <summary>
         /// The starts with checks
         /// </summary>
         private static readonly string[] startsWithChecks =
@@ -45,7 +50,8 @@ namespace IronyModManager.Parser.Games.HOI4
             Common.Constants.HOI4.Countries, Common.Constants.HOI4.Ideas, Common.Constants.HOI4.AIStrategyPlanes, Common.Constants.HOI4.AIStrategy, Common.Constants.HOI4.IntelligenceAgencies, Common.Constants.HOI4.ScriptedGui,
             Common.Constants.HOI4.Units, Common.Constants.HOI4.History, Common.Constants.HOI4.Generation, Common.Constants.HOI4.IdeaTags, Common.Constants.HOI4.Terrain, Common.Constants.HOI4.ProfilePictures,
             Common.Constants.HOI4.PeaceConference, Common.Constants.HOI4.ProfileBackgrounds, Common.Constants.HOI4.MIO, Common.Constants.HOI4.FocusInlayWindows, Common.Constants.HOI4.Raids,
-            Common.Constants.HOI4.SpecialProjects, Common.Constants.HOI4.Portraits
+            Common.Constants.HOI4.SpecialProjects, Common.Constants.HOI4.Portraits, Common.Constants.HOI4.AIFactionTheaters, Common.Constants.HOI4.Collections, Common.Constants.HOI4.Doctrines,
+            Common.Constants.HOI4.Faction, Common.Constants.HOI4.SyncDynamicTokens
         ];
 
         #endregion Fields
@@ -174,7 +180,18 @@ namespace IronyModManager.Parser.Games.HOI4
             return CanParseEquals(args) || CanParseMapCsvFile(args.File) ||
                    CanParseStartsWith(args) ||
                    IsTxtFile(args.File, Common.Constants.HOI4.GFX) || IsTxtFile(args.File, Common.Constants.HOI4.Music) ||
-                   IsAnyTxtFile(args.File, Common.Constants.HOI4.Script) || IsAnyTxtFile(args.File, Common.Constants.HOI4.Tests) || IsAnyTxtFile(args.File, Common.Constants.HOI4.Tutorial);
+                   IsAnyTxtFile(args.File, Common.Constants.HOI4.Script) ||
+                   IsAnyTxtFile(args.File, Common.Constants.HOI4.Tests) || IsAnyTxtFile(args.File, Common.Constants.HOI4.Tutorial) || CanParseExtension(args);
+        }
+
+        /// <summary>
+        /// Determines whether this instance [can parse extension] the specified arguments.
+        /// </summary>
+        /// <param name="args">The arguments.</param>
+        /// <returns><c>true</c> if this instance [can parse extension] the specified arguments; otherwise, <c>false</c>.</returns>
+        private bool CanParseExtension(CanParseArgs args)
+        {
+            return extensionChecks.Any(p => args.File.EndsWith(p, StringComparison.OrdinalIgnoreCase));
         }
 
         #endregion Methods

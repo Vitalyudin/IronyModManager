@@ -4,7 +4,7 @@
 // Created          : 02-29-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 12-23-2024
+// Last Modified On : 05-18-2026
 // ***********************************************************************
 // <copyright file="Mod.cs" company="Mario">
 //     Mario
@@ -42,6 +42,11 @@ namespace IronyModManager.Models
         /// </summary>
         private Shared.Version versionData;
 
+        /// <summary>
+        /// The user-defined presentation override.
+        /// </summary>
+        private string nameOverride;
+
         #endregion Fields
 
         #region Properties
@@ -71,11 +76,14 @@ namespace IronyModManager.Models
         /// <value>The descriptor file.</value>
         public virtual string DescriptorFile { get; set; }
 
+        /// <inheritdoc />
+        public virtual string DisplayName => string.IsNullOrWhiteSpace(NameOverride) ? Name : NameOverride;
+
         /// <summary>
         /// Gets or sets the name of the file.
         /// </summary>
         /// <value>The name of the file.</value>
-        [DescriptorProperty("path", "archive", ".zip", ".bin")]
+        [DescriptorProperty("path", "archive", true, ".zip", ".bin")]
         public virtual string FileName { get; set; }
 
         /// <summary>
@@ -115,6 +123,12 @@ namespace IronyModManager.Models
         public virtual bool IsValid { get; set; }
 
         /// <summary>
+        /// Gets or sets a value indicating whether this is a runtime placeholder for a missing collection mod.
+        /// </summary>
+        /// <value><c>true</c> for a virtual missing-mod placeholder; otherwise, <c>false</c>.</value>
+        public virtual bool IsVirtual { get; set; }
+
+        /// <summary>
         /// Gets or sets the identifier.
         /// </summary>
         /// <value>The identifier.</value>
@@ -126,6 +140,22 @@ namespace IronyModManager.Models
         /// <value>The name.</value>
         [DescriptorProperty("name")]
         public virtual string Name { get; set; }
+
+        /// <inheritdoc />
+        public virtual string NameOverride
+        {
+            get => nameOverride;
+            set
+            {
+                if (nameOverride == value)
+                {
+                    return;
+                }
+
+                nameOverride = value;
+                OnPropertyChanged(nameof(DisplayName));
+            }
+        }
 
         /// <summary>
         /// Gets or sets the order.
@@ -146,12 +176,7 @@ namespace IronyModManager.Models
                     return FullPath;
                 }
 
-                if (!string.IsNullOrWhiteSpace(Path.GetExtension(FullPath)))
-                {
-                    return Path.GetDirectoryName(FullPath);
-                }
-
-                return FullPath;
+                return !string.IsNullOrWhiteSpace(Path.GetExtension(FullPath)) ? Path.GetDirectoryName(FullPath) : FullPath;
             }
         }
 
@@ -231,14 +256,7 @@ namespace IronyModManager.Models
                 if (!string.IsNullOrWhiteSpace(Version))
                 {
                     var convertedVersion = Version.ToVersion();
-                    if (convertedVersion != null)
-                    {
-                        versionData = convertedVersion;
-                    }
-                    else
-                    {
-                        versionData = new Shared.Version();
-                    }
+                    versionData = convertedVersion ?? new Shared.Version();
                 }
                 else
                 {

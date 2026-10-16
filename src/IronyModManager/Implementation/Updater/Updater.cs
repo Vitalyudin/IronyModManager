@@ -1,21 +1,21 @@
-﻿// ***********************************************************************
+// ***********************************************************************
 // Assembly         : IronyModManager
 // Author           : Mario
 // Created          : 09-16-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 11-02-2022
+// Last Modified On : 12-05-2025
 // ***********************************************************************
 // <copyright file="Updater.cs" company="Mario">
 //     Mario
 // </copyright>
 // <summary></summary>
 // ***********************************************************************
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Threading.Tasks;
 using IronyModManager.Implementation.Actions;
@@ -43,6 +43,11 @@ namespace IronyModManager.Implementation.Updater
         private readonly Subject<Exception> error;
 
         /// <summary>
+        /// The application action
+        /// </summary>
+        private readonly IAppAction appAction;
+
+        /// <summary>
         /// The is installer version
         /// </summary>
         private readonly bool isInstallerVersion;
@@ -53,7 +58,7 @@ namespace IronyModManager.Implementation.Updater
         private readonly Subject<int> progress;
 
         /// <summary>
-        /// The shut down state
+        /// The shut-down state
         /// </summary>
         private readonly IShutDownState shutDownState;
 
@@ -115,6 +120,7 @@ namespace IronyModManager.Implementation.Updater
         /// <param name="shutDownState">State of the shut down.</param>
         public Updater(UpdateUnpackProgressHandler updateProgressHandler, IUpdaterService updaterService, IAppAction appAction, IShutDownState shutDownState)
         {
+            this.appAction = appAction;
             this.shutDownState = shutDownState;
             isInstallerVersion = IsInstallerVersion();
             this.updaterService = updaterService;
@@ -126,25 +132,21 @@ namespace IronyModManager.Implementation.Updater
                 SecurityProtocolType = System.Net.SecurityProtocolType.Tls12,
                 AppCastHandler = new IronyAppCast(isInstallerVersion, updaterService),
                 Configuration = updaterConfiguration,
-                TmpDownloadFilePath = StaticResources.GetUpdaterPath().FirstOrDefault()
+                TmpDownloadFilePath = StaticResources.GetUpdaterPath()
             };
-            updater.DownloadStarted += (sender, path) =>
+            updater.DownloadStarted += (_, _) =>
             {
                 progress.OnNext(0);
             };
-            updater.DownloadHadError += (sender, path, exception) =>
+            updater.DownloadHadError += (_, _, exception) =>
             {
-                if (exception.Message != lastException?.Message)
-                {
-                    error.OnNext(exception);
-                    lastException = exception;
-                }
+                ReportError(exception);
             };
-            updater.DownloadMadeProgress += (sender, item, progress) =>
+            updater.DownloadMadeProgress += (_, _, progress) =>
             {
                 this.progress.OnNext(progress.ProgressPercentage);
             };
-            updater.DownloadFinished += (sender, path) =>
+            updater.DownloadFinished += (_, path) =>
             {
                 updatePath = path;
                 progress.OnNext(100);
@@ -190,6 +192,7 @@ namespace IronyModManager.Implementation.Updater
                 updateInfo = await updater.CheckForUpdatesQuietly();
                 allowPrerelease = settings.CheckForPrerelease;
             }
+
             if (updateInfo == null)
             {
                 return false;
@@ -210,30 +213,43 @@ namespace IronyModManager.Implementation.Updater
             {
                 return false;
             }
+
             busy = true;
-            if (updateInfo != null && updateInfo.Updates.Count > 0)
+            try
             {
-                lastException = null;
-                updatePath = string.Empty;
-                await updater.InitAndBeginDownload(updateInfo.Updates.FirstOrDefault());
-                while (updater.UpdateDownloading)
+                if (updateInfo != null && updateInfo.Updates.Count > 0)
                 {
-                    // Sigh
-                    await Task.Delay(25);
+                    lastException = null;
+                    updatePath = string.Empty;
+                    try
+                    {
+                        await updater.InitAndBeginDownload(updateInfo.Updates.FirstOrDefault());
+                    }
+                    catch (InvalidDataException exception)
+                    {
+                        ReportError(exception);
+                        return false;
+                    }
+
+                    while (updater.UpdateDownloading)
+                    {
+                        // Sigh
+                        await Task.Delay(25);
+                    }
+
+                    // Slight safety delay
+                    await Task.Delay(250);
+                    var updateSettings = new UpdateSettings { IsInstaller = isInstallerVersion, Path = AppDomain.CurrentDomain.BaseDirectory };
+                    await File.WriteAllTextAsync(Path.Combine(StaticResources.GetUpdaterPath(), Constants.UpdateSettings), JsonConvert.SerializeObject(updateSettings));
+                    return !string.IsNullOrWhiteSpace(updatePath) || lastException == null; // In case file is already downloaded
                 }
-                // Slight safety delay
-                await Task.Delay(250);
-                busy = false;
-                var updateSettings = new UpdateSettings()
-                {
-                    IsInstaller = isInstallerVersion,
-                    Path = AppDomain.CurrentDomain.BaseDirectory
-                };
-                await File.WriteAllTextAsync(Path.Combine(StaticResources.GetUpdaterPath().FirstOrDefault(), Constants.UpdateSettings), JsonConvert.SerializeObject(updateSettings));
-                return !string.IsNullOrWhiteSpace(updatePath) || lastException == null; // In case file is already downloaded
+
+                return false;
             }
-            busy = false;
-            return false;
+            finally
+            {
+                busy = false;
+            }
         }
 
         /// <summary>
@@ -244,8 +260,9 @@ namespace IronyModManager.Implementation.Updater
         {
             if (updateInfo != null && updateInfo.Updates.Count > 0)
             {
-                return string.Join(Environment.NewLine, updateInfo.Updates.FirstOrDefault().Description.SplitOnNewLine(false).Select(p => p.Trim()));
+                return string.Join(Environment.NewLine, updateInfo.Updates.FirstOrDefault()!.Description.SplitOnNewLine(false).Select(p => p.Trim()));
             }
+
             return string.Empty;
         }
 
@@ -255,10 +272,11 @@ namespace IronyModManager.Implementation.Updater
         /// <returns>System.String.</returns>
         public string GetTitle()
         {
-            if (updateInfo != null && updateInfo.Updates.Any())
+            if (updateInfo != null && updateInfo.Updates.Count != 0)
             {
-                return updateInfo.Updates.FirstOrDefault().Title;
+                return updateInfo.Updates.FirstOrDefault()!.Title;
             }
+
             return string.Empty;
         }
 
@@ -268,10 +286,11 @@ namespace IronyModManager.Implementation.Updater
         /// <returns>System.String.</returns>
         public string GetVersion()
         {
-            if (updateInfo != null && updateInfo.Updates.Any())
+            if (updateInfo != null && updateInfo.Updates.Count != 0)
             {
-                return updateInfo.Updates.FirstOrDefault().Version;
+                return updateInfo.Updates.FirstOrDefault()!.Version;
             }
+
             return string.Empty;
         }
 
@@ -285,15 +304,32 @@ namespace IronyModManager.Implementation.Updater
             {
                 return false;
             }
+
             busy = true;
-            await shutDownState.WaitUntilFreeAsync();
-            updater.InstallUpdate(updateInfo.Updates.FirstOrDefault(), updatePath);
-            while (updater.UpdateInstalling)
+            try
             {
-                await Task.Delay(25);
+                await shutDownState.WaitUntilFreeAsync();
+                try
+                {
+                    updater.InstallUpdate(updateInfo.Updates.FirstOrDefault(), updatePath);
+                }
+                catch (InvalidDataException exception)
+                {
+                    ReportError(exception);
+                    return false;
+                }
+
+                while (updater.UpdateInstalling)
+                {
+                    await Task.Delay(25);
+                }
+
+                return true;
             }
-            busy = false;
-            return true;
+            finally
+            {
+                busy = false;
+            }
         }
 
         /// <summary>
@@ -316,6 +352,39 @@ namespace IronyModManager.Implementation.Updater
         {
             var files = Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, "*.exe");
             return files.Any(p => Path.GetFileName(p).StartsWith("unins", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Opens the release page for a manual update.
+        /// </summary>
+        /// <returns>Task&lt;System.Boolean&gt;.</returns>
+        public Task<bool> OpenReleasePageAsync()
+        {
+            var title = GetTitle();
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return Task.FromResult(false);
+            }
+
+            var releasesUri = new Uri(Constants.ReleasesUrl, UriKind.Absolute);
+            var releaseUri = new UriBuilder(releasesUri)
+            {
+                Path = $"{releasesUri.AbsolutePath.TrimEnd('/')}/tag/{Uri.EscapeDataString(title)}"
+            }.Uri;
+            return appAction.OpenAsync(releaseUri.AbsoluteUri);
+        }
+
+        /// <summary>
+        /// Reports an updater error without repeating the same message.
+        /// </summary>
+        /// <param name="exception">The updater exception.</param>
+        private void ReportError(Exception exception)
+        {
+            if (exception.Message != lastException?.Message)
+            {
+                error.OnNext(exception);
+                lastException = exception;
+            }
         }
 
         #endregion Methods

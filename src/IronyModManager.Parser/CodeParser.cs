@@ -4,7 +4,7 @@
 // Created          : 02-22-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 02-12-2025
+// Last Modified On : 07-08-2026
 // ***********************************************************************
 // <copyright file="CodeParser.cs" company="Mario">
 //     Mario
@@ -31,8 +31,9 @@ namespace IronyModManager.Parser
     /// Implements the <see cref="IronyModManager.Parser.Common.Parsers.ICodeParser" />
     /// </summary>
     /// <seealso cref="IronyModManager.Parser.Common.Parsers.ICodeParser" />
+    /// <remarks>Initializes a new instance of the <see cref="CodeParser" /> class.</remarks>
     [ExcludeFromCoverage("Code parser is tested in parser implementations.")]
-    public class CodeParser : ICodeParser
+    public class CodeParser(ILogger logger) : ICodeParser
     {
         #region Fields
 
@@ -68,22 +69,9 @@ namespace IronyModManager.Parser
         /// <summary>
         /// The logger
         /// </summary>
-        private readonly ILogger logger;
+        private readonly ILogger logger = logger;
 
         #endregion Fields
-
-        #region Constructors
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CodeParser" /> class.
-        /// </summary>
-        /// <param name="logger">The logger.</param>
-        public CodeParser(ILogger logger)
-        {
-            this.logger = logger;
-        }
-
-        #endregion Constructors
 
         #region Methods
 
@@ -485,7 +473,7 @@ namespace IronyModManager.Parser
                     var childElement = DIResolver.Get<IScriptElement>();
                     childElement.Key = elValue.Value;
                     childElement.Values = values;
-                    parentElement.Values = new List<IScriptElement> { childElement };
+                    parentElement.Values = (List<IScriptElement>)[childElement];
                     return parentElement;
                 }
                 else
@@ -959,7 +947,7 @@ namespace IronyModManager.Parser
                         containsComma = true;
                     }
 
-                    this.value = decimal.TryParse(val, NumberStyles.Number, CultureInfo.InvariantCulture, out var result) ? result.ToString("G0", CultureInfo.InvariantCulture) : val;
+                    this.value = TryConvertDecimal(val);
                     if (containsComma)
                     {
                         this.value += ",";
@@ -968,6 +956,32 @@ namespace IronyModManager.Parser
             }
 
             #endregion Properties
+
+            #region Methods
+
+            /// <summary>
+            /// Tries the convert decimal.
+            /// </summary>
+            /// <param name="value">The value.</param>
+            /// <returns>System.String.</returns>
+            private string TryConvertDecimal(string value)
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+
+                // Ensure anti scientific output is in place
+                if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var result))
+                {
+                    var format = result == decimal.Truncate(result) ? "0" : "0.############################";
+                    return result.ToString(format, CultureInfo.InvariantCulture);
+                }
+
+                return value;
+            }
+
+            #endregion Methods
         }
 
         #endregion Classes

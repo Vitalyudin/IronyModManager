@@ -4,7 +4,7 @@
 // Created          : 02-22-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 02-19-2025
+// Last Modified On : 05-18-2026
 // ***********************************************************************
 // <copyright file="ModParser.cs" company="Mario">
 //     Mario
@@ -72,13 +72,15 @@ namespace IronyModManager.Parser.Mod
         /// </summary>
         /// <param name="lines">The lines.</param>
         /// <param name="descriptorModType">Type of the descriptor mod.</param>
+        /// <param name="args">The arguments.</param>
         /// <returns>IModObject.</returns>
-        public IModObject Parse(IEnumerable<string> lines, DescriptorModType descriptorModType)
+        public IModObject Parse(IEnumerable<string> lines, DescriptorModType descriptorModType, ModParserArgs args = null)
         {
             return descriptorModType switch
             {
-                DescriptorModType.JsonMetadata => ParseJsonMetadata(lines),
-                _ => ParseDescriptorMod(lines)
+                DescriptorModType.JsonMetadata => ParseJsonMetadata(lines, args),
+                DescriptorModType.JsonMetadataV2 => ParseJsonMetadata(lines, args), // Has not changed but they dropped pdx launcher in EU5
+                _ => ParseDescriptorMod(lines, args)
             };
         }
 
@@ -88,10 +90,7 @@ namespace IronyModManager.Parser.Mod
         /// <returns>JsonSerializerSettings.</returns>
         private JsonSerializerSettings GetJsonSerializerSettings()
         {
-            jsonSerializerSettings ??= new JsonSerializerSettings
-            {
-                Error = (_, error) => error.ErrorContext.Handled = true, NullValueHandling = NullValueHandling.Ignore, Converters = new List<JsonConverter> { new JsonMetaDataConverter() }
-            };
+            jsonSerializerSettings ??= new JsonSerializerSettings { Error = (_, error) => error.ErrorContext.Handled = true, NullValueHandling = NullValueHandling.Ignore, Converters = [new JsonMetaDataConverter()] };
             return jsonSerializerSettings;
         }
 
@@ -99,16 +98,24 @@ namespace IronyModManager.Parser.Mod
         /// Parses the descriptor mod.
         /// </summary>
         /// <param name="lines">The lines.</param>
+        /// <param name="args">The arguments.</param>
         /// <returns>IModObject.</returns>
-        private IModObject ParseDescriptorMod(IEnumerable<string> lines)
+        private IModObject ParseDescriptorMod(IEnumerable<string> lines, ModParserArgs args)
         {
             var data = ParseCode(lines);
             var obj = DIResolver.Get<IModObject>();
             if (data != null)
             {
+                var protonPrefix = args != null ? LinuxProtonResolver.GetProtonPrefix(args.BaseSteamDirectory, args.SteamAppId) : string.Empty;
+
                 obj.ReplacePath = GetKeyedValues<string>(data.Values, "replace_path");
                 obj.UserDir = GetKeyedValues<string>(data.Values, "user_dir");
                 obj.FileName = GetValue<string>(data.Values, "path", "archive") ?? string.Empty;
+                if (args is { IsProton: true } && !string.IsNullOrWhiteSpace(protonPrefix) && LinuxProtonResolver.IsProtonDrivePath(obj.FileName))
+                {
+                    obj.FileName = LinuxProtonResolver.FromProtonPath(obj.FileName, protonPrefix);
+                }
+
                 obj.Picture = GetValue<string>(data.Values, "picture") ?? string.Empty;
                 obj.Name = GetValue<string>(data.Values, "name") ?? string.Empty;
                 obj.Version = GetValue<string>(data.Values, "supported_version", "version") ?? string.Empty;
@@ -124,10 +131,13 @@ namespace IronyModManager.Parser.Mod
         /// Parses the json metadata.
         /// </summary>
         /// <param name="lines">The lines.</param>
+        /// <param name="args">The arguments.</param>
         /// <returns>IModObject.</returns>
         /// <exception cref="System.AggregateException"></exception>
-        private IModObject ParseJsonMetadata(IEnumerable<string> lines)
+        private IModObject ParseJsonMetadata(IEnumerable<string> lines, ModParserArgs args)
         {
+            var protonPrefix = args != null ? LinuxProtonResolver.GetProtonPrefix(args.BaseSteamDirectory, args.SteamAppId) : string.Empty;
+
             var obj = DIResolver.Get<IModObject>();
             try
             {
@@ -156,6 +166,11 @@ namespace IronyModManager.Parser.Mod
                 }
 
                 obj.FileName = result.Path;
+                if (args is { IsProton: true } && !string.IsNullOrWhiteSpace(protonPrefix) && LinuxProtonResolver.IsProtonDrivePath(obj.FileName))
+                {
+                    obj.FileName = LinuxProtonResolver.FromProtonPath(obj.FileName, protonPrefix);
+                }
+
                 obj.Name = result.Name;
                 obj.Version = result.SupportedGameVersion;
                 obj.Tags = result.Tags;

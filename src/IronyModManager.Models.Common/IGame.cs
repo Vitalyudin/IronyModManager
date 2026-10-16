@@ -4,15 +4,17 @@
 // Created          : 02-12-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 10-29-2022
+// Last Modified On : 12-03-2025
 // ***********************************************************************
 // <copyright file="IGame.cs" company="Mario">
 //     Mario
 // </copyright>
 // <summary></summary>
 // ***********************************************************************
+
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using IronyModManager.Localization;
 using IronyModManager.Shared.Models;
 
@@ -122,6 +124,12 @@ namespace IronyModManager.Models.Common
         string LauncherSettingsPrefix { get; set; }
 
         /// <summary>
+        /// Gets or sets the linux proton version.
+        /// </summary>
+        /// <value>The linux proton version.</value>
+        string LinuxProtonVersion { get; set; }
+
+        /// <summary>
         /// Gets or sets the log location.
         /// </summary>
         /// <value>The log location.</value>
@@ -162,6 +170,12 @@ namespace IronyModManager.Models.Common
         /// </summary>
         /// <value>The steam application identifier.</value>
         int SteamAppId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the steam root.
+        /// </summary>
+        /// <value>The steam root.</value>
+        string SteamRoot { get; set; }
 
         /// <summary>
         /// Gets or sets the supported merge types.

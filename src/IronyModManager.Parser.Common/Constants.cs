@@ -4,7 +4,7 @@
 // Created          : 02-16-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 05-05-2025
+// Last Modified On : 06-16-2026
 // ***********************************************************************
 // <copyright file="Constants.cs" company="Mario">
 //     Mario
@@ -75,6 +75,11 @@ namespace IronyModManager.Parser.Common
         /// The GUI extension
         /// </summary>
         public const string GuiExtension = ".gui";
+
+        /// <summary>
+        /// The json extension
+        /// </summary>
+        public const string JsonExtension = ".json";
 
         /// <summary>
         /// The localization extension
@@ -203,6 +208,11 @@ namespace IronyModManager.Parser.Common
             public static readonly string AIAreas = MergePath(CommonPath, "ai_areas");
 
             /// <summary>
+            /// The AI faction theaters
+            /// </summary>
+            public static readonly string AIFactionTheaters = MergePath(CommonPath, "ai_faction_theaters");
+
+            /// <summary>
             /// The AI strategy
             /// </summary>
             public static readonly string AIStrategy = MergePath(CommonPath, "ai_strategy");
@@ -228,6 +238,11 @@ namespace IronyModManager.Parser.Common
             public static readonly string Characters = MergePath(CommonPath, "characters");
 
             /// <summary>
+            /// The collections
+            /// </summary>
+            public static readonly string Collections = MergePath(CommonPath, "collections");
+
+            /// <summary>
             /// The countries
             /// </summary>
             public static readonly string Countries = MergePath(CommonPath, "countries");
@@ -251,6 +266,16 @@ namespace IronyModManager.Parser.Common
             /// The difficulty settings
             /// </summary>
             public static readonly string DifficultySettings = MergePath(CommonPath, "difficulty_settings");
+
+            /// <summary>
+            /// The doctrines
+            /// </summary>
+            public static readonly string Doctrines = MergePath(CommonPath, "doctrines");
+
+            /// <summary>
+            /// The faction
+            /// </summary>
+            public static readonly string Faction = MergePath(CommonPath, "factions");
 
             /// <summary>
             /// The focus inlay windows
@@ -362,6 +387,11 @@ namespace IronyModManager.Parser.Common
             /// The state categories
             /// </summary>
             public static readonly string StateCategories = MergePath(CommonPath, "state_category");
+
+            /// <summary>
+            /// The synchronize dynamic tokens
+            /// </summary>
+            public static readonly string SyncDynamicTokens = MergePath(CommonPath, "synchronized_dynamic_tokens");
 
             /// <summary>
             /// The technologies
@@ -529,32 +559,32 @@ namespace IronyModManager.Parser.Common
             /// <summary>
             /// The terminators
             /// </summary>
-            public static readonly char[] CodeTerminators = { OpenObject, CloseObject };
+            public static readonly char[] CodeTerminators = [OpenObject, CloseObject];
 
             /// <summary>
             /// The generic key ids
             /// </summary>
-            public static readonly string[] GenericKeyIds = { "id=", "name=", "key=", "format=", "world=", "localization=" };
+            public static readonly string[] GenericKeyIds = ["id=", "name=", "key=", "format=", "world=", "localization="];
 
             /// <summary>
             /// The generic keys
             /// </summary>
-            public static readonly string[] GenericKeys = { "id", "name", "key", "format", "world", "localization" };
+            public static readonly string[] GenericKeys = ["id", "name", "key", "format", "world", "localization"];
 
             /// <summary>
             /// The inline operators
             /// </summary>
-            public static readonly string[] InlineOperators = { "hsv", "rgb" };
+            public static readonly string[] InlineOperators = ["hsv", "rgb"];
 
             /// <summary>
             /// The namespace
             /// </summary>
-            public static readonly string[] Namespaces = { "namespace", "add_namespace" };
+            public static readonly string[] Namespaces = ["namespace", "add_namespace"];
 
             /// <summary>
             /// The operators
             /// </summary>
-            public static readonly char[] Operators = { EqualsOperator, GreaterThanOperator, LowerThanOperator, NotEqualOperator };
+            public static readonly char[] Operators = [EqualsOperator, GreaterThanOperator, LowerThanOperator, NotEqualOperator];
 
             #endregion Fields
         }

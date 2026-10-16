@@ -1,34 +1,114 @@
-# Documentation
-Check the [Wiki](https://github.com/bcssov/IronyModManager/wiki)
+# Irony Mod Manager
 
-# Building Irony Mod Manager
-All instructions are for Windows.
-1. Install Visual Studio 2022 (required for .NET6)
-1. Clone the repo to your local machine
-1. Run cmd\build-tools.bat to build the LocalizationResourceGenerator
-1. If you don't already have one, create a folder for local NuGet packages and unzip the [CWTools.Irony-Private.0.4.0-alpha8](https://github.com/bcssov/IronyModManager/files/7798143/CWTools.Irony-Private.0.4.0-alpha8.zip) package to it
-    * This is just an up to date version of CWTools, the one on the public NuGet is older
-    * Example path: C:\Users\username\code\LocalNuGet
-    * If you need to set up a local NuGet repo:
-        1. If not already registered, register the LocalNuGet folder with VisualStudio by clicking Tools -> NuGet Package Manager -> Package Manager Settings
-        1. Select the Package Sources menu item
-        1. Hit the '+' plus sign icon to create a new package source
-            1. Name it Local
-            1. Point it at the folder you created before
-1. In the IronyModManager directory, create a folder called "keys"
-    * Example path: C:\Users\username\code\IronyModManager\keys
-1. Open the Visual Studio Terminal and create the following keys in that folder by using the command "sn -k keyPairName.snk"
-    * Irony-Main
-    * Irony-Plugin
-1. In the terminal, unpack the public keys from the key pairs by using the command "sn -p keyPairName.snk publicKeyName.snk"
-    * Irony-Main-Public
-    * Irony-Plugin-Public
-1. Copy the public keys to the \src\IronyModManager.DI folder
-1. Right click the IronyModManager.Parser project file and select Manage NuGet Packages
-    * CWTools has a dependency on FSharp.Core v4.7.0 that isn't automatically resolved, so add that to the project
-1. Restore NuGet Packages for the solution
-1. Rebuild All
-1. Set IronyModManager as the Startup project and launch it
+Irony Mod Manager is a moddable, high‑performance mod manager primarily focused on Paradox games (e.g., Stellaris, EU4, HOI4). It replaces the built‑in Paradox launchers with something faster, more reliable, and actually aware of how mods interact with each other.
 
-# Special Thanks
-Special thanks to tboby from [CWTools](https://github.com/tboby/cwtools) for extending CWTools API for my needs. And also thanks to all early adopters and testers.
+---
+
+## 🔽 Download
+
+Always download the latest version here:
+
+👉 **[Latest Irony Mod Manager Release](https://github.com/bcssov/IronyModManager/releases/latest)**
+
+Official Irony Mod Manager binaries are published on GitHub Releases.  
+Package managers such as winget and AUR source their downloads from there.
+
+---
+
+## Documentation
+
+Full documentation is available on the project Wiki:
+
+- **[Irony Mod Manager Wiki](https://github.com/bcssov/IronyModManager/wiki)**
+
+The Wiki covers:
+
+- Installation and basic usage  
+- Supported games  
+- Load order, conflict resolution and advanced features  
+- Troubleshooting and known issues  
+
+---
+
+## Building Irony Mod Manager (Windows)
+
+All instructions below are for **Windows** and **Visual Studio 2026**.
+
+### Prerequisites
+
+- Windows  
+- **[Visual Studio 2026](https://visualstudio.microsoft.com/)** with the *.NET 10* workload
+- Git  
+- Command line (CMD or PowerShell)  
+
+---
+
+## Step‑by‑step build guide
+
+### 1. Install Visual Studio 2026
+Make sure the .NET 10 SDK workload is installed.
+
+### 2. Clone the repository
+
+```bash
+git clone https://github.com/bcssov/IronyModManager.git
+cd IronyModManager
+```
+
+### 3. Build the LocalizationResourceGenerator
+
+```bat
+cmd\build-tools.bat
+```
+
+### 4. Create strong name keys
+
+Create a folder:
+
+```text
+C:\Users\username\code\IronyModManager\keys
+```
+
+Open the *Visual Studio Developer Command Prompt* and run:
+
+```bat
+sn -k Irony-Main.snk
+sn -k Irony-Plugin.snk
+
+sn -p Irony-Main.snk Irony-Main-Public.snk
+sn -p Irony-Plugin.snk Irony-Plugin-Public.snk
+```
+
+Copy:
+
+- `Irony-Main-Public.snk`  
+- `Irony-Plugin-Public.snk`  
+
+into:
+
+```text
+.\src\IronyModManager.DI
+```
+
+---
+
+### 5. Restore NuGet packages
+Build once and let Visual Studio restore dependencies automatically.
+
+CWTools and its companion assemblies are checked into `References/Direct`; no private CWTools package download or local package source is required.
+
+### 6. Build the solution
+Visual Studio → Build → Rebuild Solution.
+
+### 7. Run Irony Mod Manager
+Set **IronyModManager** as the Startup Project → press **F5**.
+
+If everything is configured correctly, Irony Mod Manager will launch.
+
+---
+
+## Special Thanks
+
+Special thanks to **tboby** for creating CWTools and extending its C# API for Irony. Irony's reviewed build is maintained on the **[Irony CWTools fork](https://github.com/bcssov/cwtools)** and retains the **[original upstream lineage](https://github.com/cwtools/cwtools)**.
+
+Thanks also to all early adopters and testers for their continued feedback and support.

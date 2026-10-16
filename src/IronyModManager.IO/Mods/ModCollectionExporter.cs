@@ -4,7 +4,7 @@
 // Created          : 03-09-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 03-22-2024
+// Last Modified On : 05-18-2026
 // ***********************************************************************
 // <copyright file="ModCollectionExporter.cs" company="Mario">
 //     Mario
@@ -34,8 +34,6 @@ using IronyModManager.Shared;
 using IronyModManager.Shared.Configuration;
 using IronyModManager.Shared.MessageBus;
 using Newtonsoft.Json;
-using SharpCompress.Archives;
-using SharpCompress.Readers;
 
 namespace IronyModManager.IO.Mods
 {
@@ -44,87 +42,63 @@ namespace IronyModManager.IO.Mods
     /// Implements the <see cref="IronyModManager.IO.Common.Mods.IModCollectionExporter" />
     /// </summary>
     /// <seealso cref="IronyModManager.IO.Common.Mods.IModCollectionExporter" />
+    /// <remarks>Initializes a new instance of the <see cref="ModCollectionExporter" /> class.</remarks>
     [ExcludeFromCoverage("Skipping testing IO logic.")]
-    public class ModCollectionExporter : IModCollectionExporter
+    public class ModCollectionExporter(IModWriter modWriter, ILogger logger, IMessageBus messageBus, IMapper mapper) : IModCollectionExporter
     {
         #region Fields
 
         /// <summary>
         /// The logger
         /// </summary>
-        private readonly ILogger logger;
+        private readonly ILogger logger = logger;
 
         /// <summary>
         /// The mapper
         /// </summary>
-        private readonly IMapper mapper;
+        private readonly IMapper mapper = mapper;
 
         /// <summary>
         /// The message bus
         /// </summary>
-        private readonly IMessageBus messageBus;
+        private readonly IMessageBus messageBus = messageBus;
 
         /// <summary>
         /// The mod writer
         /// </summary>
-        private readonly IModWriter modWriter;
+        private readonly IModWriter modWriter = modWriter;
 
         /// <summary>
         /// The paradox importer
         /// </summary>
-        private readonly ParadoxImporter paradoxImporter;
+        private readonly ParadoxImporter paradoxImporter = new(logger);
 
         /// <summary>
         /// The paradox launcher exporter
         /// </summary>
-        private readonly ParadoxLauncherExporter paradoxLauncherExporter;
+        private readonly ParadoxLauncherExporter paradoxLauncherExporter = new();
 
         /// <summary>
         /// The paradox launcher exporter202010
         /// </summary>
-        private readonly ParadoxLauncherExporter202110 paradoxLauncherExporter202110;
+        private readonly ParadoxLauncherExporter202110 paradoxLauncherExporter202110 = new();
 
         /// <summary>
         /// The paradox launcher importer
         /// </summary>
-        private readonly ParadoxLauncherImporter paradoxLauncherImporter;
+        private readonly ParadoxLauncherImporter paradoxLauncherImporter = new(logger);
 
         /// <summary>
         /// The paradox launcher importer beta
         /// </summary>
-        private readonly ParadoxLauncherImporterBeta paradoxLauncherImporterBeta;
+        private readonly ParadoxLauncherImporterBeta paradoxLauncherImporterBeta = new(logger);
 
         /// <summary>
         /// The paradoxos importer
         /// </summary>
-        private readonly ParadoxosImporter paradoxosImporter;
+        private readonly ParadoxosImporter paradoxosImporter = new(logger);
 
         #endregion Fields
-
-        #region Constructors
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ModCollectionExporter" /> class.
-        /// </summary>
-        /// <param name="modWriter">The mod writer.</param>
-        /// <param name="logger">The logger.</param>
-        /// <param name="messageBus">The message bus.</param>
-        /// <param name="mapper">The mapper.</param>
-        public ModCollectionExporter(IModWriter modWriter, ILogger logger, IMessageBus messageBus, IMapper mapper)
-        {
-            paradoxosImporter = new ParadoxosImporter(logger);
-            paradoxImporter = new ParadoxImporter(logger);
-            paradoxLauncherImporter = new ParadoxLauncherImporter(logger);
-            paradoxLauncherExporter = new ParadoxLauncherExporter();
-            paradoxLauncherImporterBeta = new ParadoxLauncherImporterBeta(logger);
-            paradoxLauncherExporter202110 = new ParadoxLauncherExporter202110();
-            this.logger = logger;
-            this.messageBus = messageBus;
-            this.mapper = mapper;
-            this.modWriter = modWriter;
-        }
-
-        #endregion Constructors
 
         #region Methods
 
@@ -133,6 +107,7 @@ namespace IronyModManager.IO.Mods
         /// </summary>
         /// <param name="parameters">The parameters.</param>
         /// <returns>Task&lt;System.Boolean&gt;.</returns>
+        /// <exception cref="ArgumentException">Invalid descriptor type</exception>
         /// <exception cref="System.ArgumentException">Invalid descriptor type</exception>
         public async Task<bool> ExportAsync(ModCollectionExporterParams parameters)
         {
@@ -182,10 +157,13 @@ namespace IronyModManager.IO.Mods
                 newMod.Tags = mod.Tags;
                 newMod.UserDir = mod.UserDir;
                 newMod.Order = mod.Order;
+                newMod.Game = mod.Game;
                 var dependencies = mod.Dependencies;
                 if (dependencies != null && dependencies.Any())
                 {
                     var newDependencies = new List<string>();
+
+                    // ReSharper disable once LoopCanBeConvertedToQuery
                     foreach (var item in dependencies)
                     {
                         newDependencies.Add(modWriter.FormatPrefixModName(parameters.ModNameOverride, item));
@@ -260,7 +238,7 @@ namespace IronyModManager.IO.Mods
                             {
                                 var file = Path.Combine(Common.Constants.ModExportPath, parameters.Mod.Name.GenerateShortFileNameHashId(4).GenerateValidFileName() + "_" + mod.Name.GenerateValidFileName().GenerateShortFileNameHashId(8),
                                     item.Replace(mod.FullPath, string.Empty).Trim('\\').Trim('/'));
-                                if (item.EndsWith(Shared.Constants.DescriptorJsonMetadata) && parameters.DescriptorType == DescriptorType.JsonMetadata)
+                                if (item.EndsWith(Shared.Constants.DescriptorJsonMetadata) && parameters.DescriptorType is DescriptorType.JsonMetadata or DescriptorType.JsonMetadataV2)
                                 {
                                     var ms = new MemoryStream();
                                     await modWriter.WriteDescriptorToStreamAsync(new ModWriterParameters { Mod = cloneMod(mod), DescriptorType = parameters.DescriptorType }, ms, true);
@@ -290,7 +268,7 @@ namespace IronyModManager.IO.Mods
                             {
                                 var file = Path.Combine(Common.Constants.ModExportPath, parameters.Mod.Name.GenerateShortFileNameHashId(4).GenerateValidFileName() + "_" + mod.Name.GenerateValidFileName().GenerateShortFileNameHashId(8),
                                     item.Replace(mod.FullPath, string.Empty).Trim('\\').Trim('/'));
-                                if (item.EndsWith(Shared.Constants.DescriptorJsonMetadata) && parameters.DescriptorType == DescriptorType.JsonMetadata)
+                                if (item.EndsWith(Shared.Constants.DescriptorJsonMetadata) && parameters.DescriptorType is DescriptorType.JsonMetadata or DescriptorType.JsonMetadataV2)
                                 {
                                     var ms = new MemoryStream();
                                     await modWriter.WriteDescriptorToStreamAsync(new ModWriterParameters { Mod = cloneMod(mod), DescriptorType = parameters.DescriptorType }, ms, true);
@@ -409,6 +387,7 @@ namespace IronyModManager.IO.Mods
         /// </summary>
         /// <param name="parameters">The parameters.</param>
         /// <returns>Task&lt;System.Boolean&gt;.</returns>
+        /// <exception cref="ArgumentException">Invalid descriptor type.</exception>
         /// <exception cref="System.ArgumentException">Invalid descriptor type.</exception>
         public Task<ICollectionImportResult> ImportParadoxAsync(ModCollectionExporterParams parameters)
         {
@@ -506,147 +485,54 @@ namespace IronyModManager.IO.Mods
             }
 
             var result = false;
-
-            int getTotalFileCount()
+            using var zip = ZipFile.Read(parameters.File);
+            var entries = zip.Where(entry => !entry.IsDirectory).ToList();
+            double total = !importInstance ? entries.Count : 1;
+            double processed = 0;
+            double previousProgress = 0;
+            foreach (var entry in entries)
             {
-                var count = 0;
-                using var fileStream = File.OpenRead(parameters.File);
-                using var reader = ReaderFactory.Open(fileStream);
-                while (reader.MoveToNextEntry())
+                var entryKey = ZipExtractionOpts.SanitizeArchivePath(entry.FileName);
+                var relativePath = entryKey.StandardizeDirectorySeparator().Trim(Path.DirectorySeparatorChar);
+                if (entryKey.Equals(Common.Constants.ExportedModContentId, StringComparison.OrdinalIgnoreCase))
                 {
-                    if (!reader.Entry.IsDirectory)
+                    if (importInstance)
                     {
-                        count++;
+                        using var entryStream = entry.OpenReader();
+                        using var memoryStream = new MemoryStream();
+                        entryStream.CopyTo(memoryStream);
+                        memoryStream.Seek(0, SeekOrigin.Begin);
+                        using var streamReader = new StreamReader(memoryStream, true);
+                        var text = streamReader.ReadToEnd();
+                        streamReader.Close();
+                        var model = JsonDISerializer.Deserialize<IModCollection>(text);
+                        mapper.Map(model, importResult);
+                        importResult!.ModNames = model.ModNames;
+                        importResult.Descriptors = model.Mods;
+                        importResult.ModIds = model.ModIds;
+                        result = true;
+                        break;
                     }
                 }
-
-                fileStream.Close();
-                return count;
-            }
-
-            void parseUsingReaderFactory()
-            {
-                double total = getTotalFileCount();
-                using var fileStream = File.OpenRead(parameters.File);
-                using var reader = ReaderFactory.Open(fileStream);
-                double processed = 0;
-                double previousProgress = 0;
-                while (reader.MoveToNextEntry())
+                else if (!importInstance)
                 {
-                    if (!reader.Entry.IsDirectory)
+                    var exportFileName = Path.Combine(relativePath.StartsWith(Common.Constants.ModExportPath + Path.DirectorySeparatorChar) ? parameters.ExportModDirectory : parameters.ModDirectory,
+                        relativePath.Replace(Common.Constants.ModExportPath + Path.DirectorySeparatorChar, string.Empty));
+                    if (!Directory.Exists(Path.GetDirectoryName(exportFileName)))
                     {
-                        var relativePath = reader.Entry.Key.StandardizeDirectorySeparator().Trim(Path.DirectorySeparatorChar);
-                        if (reader.Entry.Key.Equals(Common.Constants.ExportedModContentId, StringComparison.OrdinalIgnoreCase))
-                        {
-                            if (importInstance)
-                            {
-                                using var entryStream = reader.OpenEntryStream();
-                                using var memoryStream = new MemoryStream();
-                                entryStream.CopyTo(memoryStream);
-                                memoryStream.Seek(0, SeekOrigin.Begin);
-                                using var streamReader = new StreamReader(memoryStream, true);
-                                var text = streamReader.ReadToEnd();
-                                streamReader.Close();
-                                var model = JsonDISerializer.Deserialize<IModCollection>(text);
-                                mapper.Map(model, importResult);
-                                importResult!.ModNames = model.ModNames;
-                                importResult.Descriptors = model.Mods;
-                                importResult.ModIds = model.ModIds;
-                                result = true;
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            if (!importInstance)
-                            {
-                                var exportFileName = Path.Combine(relativePath.StartsWith(Common.Constants.ModExportPath + Path.DirectorySeparatorChar) ? parameters.ExportModDirectory : parameters.ModDirectory,
-                                    relativePath.Replace(Common.Constants.ModExportPath + Path.DirectorySeparatorChar, string.Empty));
-                                if (!Directory.Exists(Path.GetDirectoryName(exportFileName)))
-                                {
-                                    Directory.CreateDirectory(Path.GetDirectoryName(exportFileName)!);
-                                }
-
-                                reader.WriteEntryToFile(exportFileName, ZipExtractionOpts.GetExtractionOptions());
-                            }
-                        }
-
-                        processed++;
-                        var perc = GetProgressPercentage(total, processed, 100);
-                        if (perc.IsNotNearlyEqual(previousProgress))
-                        {
-                            messageBus.Publish(new ModExportProgressEvent(perc));
-                            previousProgress = perc;
-                        }
+                        Directory.CreateDirectory(Path.GetDirectoryName(exportFileName)!);
                     }
-                }
-            }
 
-            void parseUsingArchiveFactory()
-            {
-                using var fileStream = File.OpenRead(parameters.File);
-                using var reader = ArchiveFactory.Open(fileStream);
-                var entries = reader.Entries.Where(entry => !entry.IsDirectory);
-                double total = !importInstance ? entries.Count() : 1;
-                double processed = 0;
-                double previousProgress = 0;
-                foreach (var entry in entries)
+                    ZipExtractionOpts.ExtractEntryToFile(entry, exportFileName);
+                }
+
+                processed++;
+                var perc = GetProgressPercentage(total, processed, 100);
+                if (perc.IsNotNearlyEqual(previousProgress))
                 {
-                    var relativePath = entry.Key.StandardizeDirectorySeparator().Trim(Path.DirectorySeparatorChar);
-                    if (entry.Key.Equals(Common.Constants.ExportedModContentId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (importInstance)
-                        {
-                            using var entryStream = entry.OpenEntryStream();
-                            using var memoryStream = new MemoryStream();
-                            entryStream.CopyTo(memoryStream);
-                            memoryStream.Seek(0, SeekOrigin.Begin);
-                            using var streamReader = new StreamReader(memoryStream, true);
-                            var text = streamReader.ReadToEnd();
-                            streamReader.Close();
-                            var model = JsonDISerializer.Deserialize<IModCollection>(text);
-                            mapper.Map(model, importResult);
-                            importResult!.ModNames = model.ModNames;
-                            importResult.Descriptors = model.Mods;
-                            importResult.ModIds = model.ModIds;
-                            result = true;
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        if (!importInstance)
-                        {
-                            var exportFileName = Path.Combine(relativePath.StartsWith(Common.Constants.ModExportPath + Path.DirectorySeparatorChar) ? parameters.ExportModDirectory : parameters.ModDirectory,
-                                relativePath.Replace(Common.Constants.ModExportPath + Path.DirectorySeparatorChar, string.Empty));
-                            if (!Directory.Exists(Path.GetDirectoryName(exportFileName)))
-                            {
-                                Directory.CreateDirectory(Path.GetDirectoryName(exportFileName)!);
-                            }
-
-                            entry.WriteToFile(exportFileName, ZipExtractionOpts.GetExtractionOptions());
-                        }
-                    }
-
-                    processed++;
-                    var perc = GetProgressPercentage(total, processed, 100);
-                    if (perc.IsNotNearlyEqual(previousProgress))
-                    {
-                        messageBus.Publish(new ModExportProgressEvent(perc));
-                        previousProgress = perc;
-                    }
+                    messageBus.Publish(new ModExportProgressEvent(perc));
+                    previousProgress = perc;
                 }
-            }
-
-            try
-            {
-                parseUsingArchiveFactory();
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex);
-                result = false;
-                parseUsingReaderFactory();
             }
 
             collectionImportResult = importResult;

@@ -1,12 +1,12 @@
 [{
         "DirectoryPath": "assets",
-        "PreferredParser": "DefaultParser"
+        "PreferredParser": "StellarisWholeTextParser"
     }, {
         "DirectoryPath": "common",
         "PreferredParser": "GenericWholeTextParser"
     }, {
         "DirectoryPath": "common\\achievements",
-        "PreferredParser": "DefaultParser"
+        "PreferredParser": "StellarisWholeTextParser"
     }, {
         "DirectoryPath": "common\\agendas",
         "PreferredParser": "DefaultParser"
@@ -51,6 +51,9 @@
         "PreferredParser": "DefaultParser"
     }, {
         "DirectoryPath": "common\\ascension_perks",
+        "PreferredParser": "DefaultParser"
+    }, {
+        "DirectoryPath": "common\\ascension_perk_categories",
         "PreferredParser": "DefaultParser"
     }, {
         "DirectoryPath": "common\\asteroid_belts",
@@ -221,6 +224,9 @@
         "DirectoryPath": "common\\first_contact",
         "PreferredParser": "DefaultParser"
     }, {
+        "DirectoryPath": "common\\frontend_backgrounds",
+        "PreferredParser": "DefaultParser"
+    }, {
         "DirectoryPath": "common\\galactic_community_actions",
         "PreferredParser": "DefaultParser"
     }, {
@@ -266,6 +272,9 @@
         "DirectoryPath": "common\\inline_scripts\\ai",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
+        "DirectoryPath": "common\\inline_scripts\\arkship",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
         "DirectoryPath": "common\\inline_scripts\\astral_rift",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
@@ -275,6 +284,9 @@
         "DirectoryPath": "common\\inline_scripts\\colony_types",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
+        "DirectoryPath": "common\\inline_scripts\\contracts",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
         "DirectoryPath": "common\\inline_scripts\\cosmic_storms",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
@@ -282,6 +294,9 @@
         "PreferredParser": "StellarisWholeTextParser"
     }, {
         "DirectoryPath": "common\\inline_scripts\\districts",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
+        "DirectoryPath": "common\\inline_scripts\\encampment",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
         "DirectoryPath": "common\\inline_scripts\\enclaves",
@@ -320,6 +335,9 @@
         "DirectoryPath": "common\\inline_scripts\\jobs",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
+        "DirectoryPath": "common\\inline_scripts\\megastructures",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
         "DirectoryPath": "common\\inline_scripts\\output",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
@@ -332,10 +350,25 @@
         "DirectoryPath": "common\\inline_scripts\\pop_faction_types",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
+        "DirectoryPath": "common\\inline_scripts\\pop_faction_types\\actions",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
+        "DirectoryPath": "common\\inline_scripts\\pop_faction_types\\attraction",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
+        "DirectoryPath": "common\\inline_scripts\\pop_faction_types\\can_join_faction",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
+        "DirectoryPath": "common\\inline_scripts\\pop_faction_types\\effect",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
         "DirectoryPath": "common\\inline_scripts\\pop_resources",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
         "DirectoryPath": "common\\inline_scripts\\relics",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
+        "DirectoryPath": "common\\inline_scripts\\scripted_actions",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
         "DirectoryPath": "common\\inline_scripts\\ship_components",
@@ -347,6 +380,9 @@
         "DirectoryPath": "common\\inline_scripts\\shroud",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
+        "DirectoryPath": "common\\inline_scripts\\shroud\\auto_districts",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
         "DirectoryPath": "common\\inline_scripts\\shroud\\buildings",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
@@ -356,7 +392,16 @@
         "DirectoryPath": "common\\inline_scripts\\shroud\\objectives",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
+        "DirectoryPath": "common\\inline_scripts\\situations",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
         "DirectoryPath": "common\\inline_scripts\\solar_system_initializers",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
+        "DirectoryPath": "common\\inline_scripts\\special_projects",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
+        "DirectoryPath": "common\\inline_scripts\\starbase",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
         "DirectoryPath": "common\\inline_scripts\\starbase_modules",
@@ -386,6 +431,9 @@
         "DirectoryPath": "common\\inline_scripts\\trait\\subtitle",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
+        "DirectoryPath": "common\\inline_scripts\\waystation",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
         "DirectoryPath": "common\\inline_scripts\\zones",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
@@ -410,7 +458,16 @@
         "DirectoryPath": "common\\map_modes",
         "PreferredParser": "DefaultParser"
     }, {
+        "DirectoryPath": "common\\leader_tiers",
+        "PreferredParser": "DefaultParser"
+    }, {
+        "DirectoryPath": "common\\map_modes",
+        "PreferredParser": "DefaultParser"
+    }, {
         "DirectoryPath": "common\\megastructures",
+        "PreferredParser": "DefaultParser"
+    }, {
+        "DirectoryPath": "common\\megastructure_overclock_types",
         "PreferredParser": "DefaultParser"
     }, {
         "DirectoryPath": "common\\menace_perks",
@@ -419,7 +476,10 @@
         "DirectoryPath": "common\\message_types",
         "PreferredParser": "GenericKeyParser"
     }, {
-        "DirectoryPath": "common\\missions",
+        "DirectoryPath": "common\\missions\\missions",
+        "PreferredParser": "DefaultParser"
+    }, {
+        "DirectoryPath": "common\\missions\\mission_categories",
         "PreferredParser": "DefaultParser"
     }, {
         "DirectoryPath": "common\\mutations",
@@ -467,6 +527,9 @@
         "DirectoryPath": "common\\policies",
         "PreferredParser": "DefaultParser"
     }, {
+        "DirectoryPath": "common\\policy_categories",
+        "PreferredParser": "DefaultParser"
+    }, {
         "DirectoryPath": "common\\pop_categories",
         "PreferredParser": "DefaultParser"
     }, {
@@ -504,6 +567,15 @@
         "PreferredParser": "DefaultParser"
     }, {
         "DirectoryPath": "common\\resolution_groups",
+        "PreferredParser": "DefaultParser"
+    }, {
+        "DirectoryPath": "common\\resource_converters",
+        "PreferredParser": "DefaultParser"
+    }, {
+        "DirectoryPath": "common\\resource_regions",
+        "PreferredParser": "DefaultParser"
+    }, {
+        "DirectoryPath": "common\\scripted_actions",
         "PreferredParser": "DefaultParser"
     }, {
         "DirectoryPath": "common\\scripted_effects",
@@ -546,6 +618,9 @@
         "PreferredParser": "StellarisOverwrittenObjectSingleFileParser"
     }, {
         "DirectoryPath": "common\\situations",
+        "PreferredParser": "DefaultParser"
+    }, {
+        "DirectoryPath": "common\\situation_log\\categories",
         "PreferredParser": "DefaultParser"
     }, {
         "DirectoryPath": "common\\solar_system_initializers",
@@ -615,7 +690,10 @@
         "PreferredParser": "StellarisWholeTextParser"
     }, {
         "DirectoryPath": "common\\star_classes",
-        "PreferredParser": "GenericKeyParser"
+        "PreferredParser": "DefaultParser"
+    }, {
+        "DirectoryPath": "common\\star_classes\\randomizers",
+        "PreferredParser": "DefaultParser"
     }, {
         "DirectoryPath": "common\\static_modifiers",
         "PreferredParser": "DefaultParser"
@@ -765,6 +843,9 @@
         "PreferredParser": "DefaultParser"
     }, {
         "DirectoryPath": "gfx\\portraits\\portraits",
+        "PreferredParser": "StellarisWholeTextParser"
+    }, {
+        "DirectoryPath": "gfx\\portraits\\portraits\\substitutions",
         "PreferredParser": "StellarisWholeTextParser"
     }, {
         "DirectoryPath": "gfx\\portraits\\sprite_configurations",
@@ -980,6 +1061,9 @@
         "DirectoryPath": "sound\\humanoids",
         "PreferredParser": "GenericWholeTextParser"
     }, {
+        "DirectoryPath": "sound\\infernal\\portraits",
+        "PreferredParser": "GenericWholeTextParser"
+    }, {
         "DirectoryPath": "sound\\lithoids",
         "PreferredParser": "GenericWholeTextParser"
     }, {
@@ -1055,6 +1139,27 @@
         "DirectoryPath": "sound\\nemesis",
         "PreferredParser": "GenericWholeTextParser"
     }, {
+        "DirectoryPath": "sound\\nomads\\arkship_fleet_actions",
+        "PreferredParser": "GenericWholeTextParser"
+    }, {
+        "DirectoryPath": "sound\\nomads\\cetana",
+        "PreferredParser": "GenericWholeTextParser"
+    }, {
+        "DirectoryPath": "sound\\nomads\\events",
+        "PreferredParser": "GenericWholeTextParser"
+    }, {
+        "DirectoryPath": "sound\\nomads\\paragons",
+        "PreferredParser": "GenericWholeTextParser"
+    }, {
+        "DirectoryPath": "sound\\nomads\\relics",
+        "PreferredParser": "GenericWholeTextParser"
+    }, {
+        "DirectoryPath": "sound\\nomads\\ships",
+        "PreferredParser": "GenericWholeTextParser"
+    }, {
+        "DirectoryPath": "sound\\nomads\\ui",
+        "PreferredParser": "GenericWholeTextParser"
+    }, {
         "DirectoryPath": "sound\\overlord\\event_images",
         "PreferredParser": "GenericWholeTextParser"
     }, {
@@ -1082,10 +1187,16 @@
         "DirectoryPath": "sound\\paragon\\ui",
         "PreferredParser": "GenericWholeTextParser"
     }, {
+        "DirectoryPath": "sound\\pdx_account_signup",
+        "PreferredParser": "GenericWholeTextParser"
+    }, {
         "DirectoryPath": "sound\\portrait",
         "PreferredParser": "GenericWholeTextParser"
     }, {
         "DirectoryPath": "sound\\reanimated",
+        "PreferredParser": "GenericWholeTextParser"
+    }, {
+        "DirectoryPath": "sound\\s10",
         "PreferredParser": "GenericWholeTextParser"
     }, {
         "DirectoryPath": "sound\\shroud\\portraits",
@@ -1128,7 +1239,7 @@
         "PreferredParser": "GenericWholeTextParser"
     }, {
         "DirectoryPath": "tools",
-        "PreferredParser": "DefaultParser"
+        "PreferredParser": "StellarisWholeTextParser"
     }, {
         "DirectoryPath": "tweakergui_assets\\gfx\\FX",
         "PreferredParser": "GenericWholeTextParser"

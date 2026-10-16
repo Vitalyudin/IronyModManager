@@ -1,23 +1,38 @@
-﻿
-// ***********************************************************************
+﻿// ***********************************************************************
 // Assembly         : IronyModManager.Shared
 // Author           : Mario
 // Created          : 07-24-2022
 //
 // Last Modified By : Mario
-// Last Modified On : 11-26-2023
+// Last Modified On : 12-05-2025
 // ***********************************************************************
 // <copyright file="DomainConfigurationOptions.cs" company="Mario">
 //     Mario
 // </copyright>
 // <summary></summary>
 // ***********************************************************************
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace IronyModManager.Shared.Configuration
 {
+    /// <summary>
+    /// Class App.
+    /// </summary>
+    public class App
+    {
+        #region Properties
+
+        /// <summary>
+        /// Gets or sets the root storage path.
+        /// </summary>
+        /// <value>The storage path.</value>
+        public string StoragePath { get; set; }
+
+        #endregion Properties
+    }
 
     /// <summary>
     /// Class ConflictSolver.
@@ -55,28 +70,34 @@ namespace IronyModManager.Shared.Configuration
         #region Properties
 
         /// <summary>
+        /// Gets the application.
+        /// </summary>
+        /// <value>The application.</value>
+        public App App { get; } = new();
+
+        /// <summary>
         /// Gets the conflict solver.
         /// </summary>
         /// <value>The conflict solver.</value>
-        public ConflictSolver ConflictSolver { get; } = new ConflictSolver();
+        public ConflictSolver ConflictSolver { get; } = new();
 
         /// <summary>
         /// Gets the formatting.
         /// </summary>
         /// <value>The formatting.</value>
-        public Formatting Formatting { get; } = new Formatting();
+        public Formatting Formatting { get; } = new();
 
         /// <summary>
         /// Gets the osx options.
         /// </summary>
         /// <value>The osx options.</value>
-        public OSXOptions OSXOptions { get; } = new OSXOptions();
+        public OSXOptions OSXOptions { get; } = new();
 
         /// <summary>
         /// Gets the steam.
         /// </summary>
         /// <value>The steam.</value>
-        public Steam Steam { get; } = new Steam();
+        public Steam Steam { get; } = new();
 
         #endregion Properties
     }
@@ -127,10 +148,17 @@ namespace IronyModManager.Shared.Configuration
         public string GameHandlerPath { get; set; }
 
         /// <summary>
-        /// Gets or sets the install location override.
+        /// Gets or sets a value indicating whether [generate steam application identifier file].
         /// </summary>
-        /// <value>The install location override.</value>
+        /// <value><c>true</c> if [generate steam application identifier file]; otherwise, <c>false</c>.</value>
+        public bool GenerateSteamAppIdFile { get; set; }
+
+        /// <summary>
+        /// Gets or sets the installation location override.
+        /// </summary>
+        /// <value>The installation location override.</value>
         public string InstallLocationOverride { get; set; }
+
         /// <summary>
         /// Gets or sets a value indicating whether [use game handler].
         /// </summary>

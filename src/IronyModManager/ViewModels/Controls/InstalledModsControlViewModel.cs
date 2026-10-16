@@ -4,7 +4,7 @@
 // Created          : 02-29-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 06-18-2025
+// Last Modified On : 05-18-2026
 // ***********************************************************************
 // <copyright file="InstalledModsControlViewModel.cs" company="Mario">
 //     Mario
@@ -50,29 +50,9 @@ namespace IronyModManager.ViewModels.Controls
         #region Fields
 
         /// <summary>
-        /// The mod name key
+        /// Owns common mod-control user interactions.
         /// </summary>
-        private const string ModNameKey = "modName";
-
-        /// <summary>
-        /// The mod selected key
-        /// </summary>
-        private const string ModSelectedKey = "modSelected";
-
-        /// <summary>
-        /// The mod version key
-        /// </summary>
-        private const string ModVersionKey = "modVersion";
-
-        /// <summary>
-        /// The URL action
-        /// </summary>
-        private readonly IAppAction appAction;
-
-        /// <summary>
-        /// The preferences service
-        /// </summary>
-        private readonly IAppStateService appStateService;
+        private readonly ModControlInteraction interaction;
 
         /// <summary>
         /// The eval lock
@@ -80,9 +60,9 @@ namespace IronyModManager.ViewModels.Controls
         private readonly AsyncLock evalLock = new();
 
         /// <summary>
-        /// The eval mod achievements compatibility handler
+        /// Coordinates activation-scoped Installed Mods events.
         /// </summary>
-        private readonly EvalModAchievementCompatibilityHandler evalModAchievementsCompatibilityHandler;
+        private readonly InstalledModsEventCoordinator eventCoordinator;
 
         /// <summary>
         /// The eval mods queue
@@ -94,15 +74,7 @@ namespace IronyModManager.ViewModels.Controls
         /// </summary>
         private readonly IGameService gameService;
 
-        /// <summary>
-        /// The identifier generator
-        /// </summary>
-        private readonly IIDGenerator idGenerator;
-
-        /// <summary>
-        /// The localization manager
-        /// </summary>
-        private readonly ILocalizationManager localizationManager;
+        private readonly IGameStateSafetyService gameStateSafetyService;
 
         /// <summary>
         /// The mod service
@@ -110,9 +82,9 @@ namespace IronyModManager.ViewModels.Controls
         private readonly IModService modService;
 
         /// <summary>
-        /// The notification action
+        /// Owns Installed Mods search and sort presentation state.
         /// </summary>
-        private readonly INotificationAction notificationAction;
+        private readonly InstalledModsPresentationCoordinator presentationCoordinator;
 
         /// <summary>
         /// The checking state
@@ -139,11 +111,6 @@ namespace IronyModManager.ViewModels.Controls
         /// </summary>
         private bool showingPrompt;
 
-        /// <summary>
-        /// The sort orders
-        /// </summary>
-        private Dictionary<string, SortOrderControlViewModel> sortOrders;
-
         #endregion Fields
 
         #region Constructors
@@ -151,36 +118,27 @@ namespace IronyModManager.ViewModels.Controls
         /// <summary>
         /// Initializes a new instance of the <see cref="InstalledModsControlViewModel" /> class.
         /// </summary>
-        /// <param name="evalModAchievementsCompatibilityHandler">The eval mod achievements compatibility handler.</param>
-        /// <param name="idGenerator">The identifier generator.</param>
         /// <param name="gameService">The game service.</param>
-        /// <param name="localizationManager">The localization manager.</param>
         /// <param name="modService">The mod service.</param>
-        /// <param name="appStateService">The application state service.</param>
-        /// <param name="modSelectedSortOrder">The mod selected sort order.</param>
-        /// <param name="modNameSortOrder">The mod name sort order.</param>
-        /// <param name="modVersionSortOrder">The mod version sort order.</param>
-        /// <param name="filterMods">The filter mods.</param>
-        /// <param name="appAction">The application action.</param>
-        /// <param name="notificationAction">The notification action.</param>
-        public InstalledModsControlViewModel(EvalModAchievementCompatibilityHandler evalModAchievementsCompatibilityHandler, IIDGenerator idGenerator, IGameService gameService, ILocalizationManager localizationManager,
-            IModService modService, IAppStateService appStateService, SortOrderControlViewModel modSelectedSortOrder,
-            SortOrderControlViewModel modNameSortOrder, SortOrderControlViewModel modVersionSortOrder,
-            SearchModsControlViewModel filterMods, IAppAction appAction, INotificationAction notificationAction)
+        /// <param name="gameStateSafetyService">The filesystem safety state.</param>
+        /// <param name="interaction">The mod-control user interaction facade.</param>
+        /// <param name="coordinatorFactory">The Installed Mods collaborator factory.</param>
+        public InstalledModsControlViewModel(IGameService gameService, IModService modService,
+            IGameStateSafetyService gameStateSafetyService, ModControlInteraction interaction,
+            IInstalledModsCoordinatorFactory coordinatorFactory)
         {
-            this.idGenerator = idGenerator;
+            var coordinators = coordinatorFactory.Create();
             this.modService = modService;
             this.gameService = gameService;
-            this.appStateService = appStateService;
-            this.appAction = appAction;
-            this.notificationAction = notificationAction;
-            this.localizationManager = localizationManager;
-            ModNameSortOrder = modNameSortOrder;
-            ModVersionSortOrder = modVersionSortOrder;
-            ModSelectedSortOrder = modSelectedSortOrder;
-            FilterMods = filterMods;
-            this.evalModAchievementsCompatibilityHandler = evalModAchievementsCompatibilityHandler;
-            evalModsQueue = new ConcurrentBag<IMod>();
+            this.gameStateSafetyService = gameStateSafetyService;
+            this.interaction = interaction;
+            presentationCoordinator = coordinators.Presentation;
+            eventCoordinator = coordinators.Events;
+            ModNameSortOrder = presentationCoordinator.ModNameSortOrder;
+            ModVersionSortOrder = presentationCoordinator.ModVersionSortOrder;
+            ModSelectedSortOrder = presentationCoordinator.ModSelectedSortOrder;
+            FilterMods = presentationCoordinator.FilterMods;
+            evalModsQueue = [];
         }
 
         #endregion Constructors
@@ -464,6 +422,11 @@ namespace IronyModManager.ViewModels.Controls
         public virtual bool RefreshingMods { get; protected set; }
 
         /// <summary>
+        /// Gets whether the most recent installed-mod refresh completed authoritatively.
+        /// </summary>
+        public virtual bool LastRefreshAuthoritative { get; protected set; }
+
+        /// <summary>
         /// Gets or sets the selected mod.
         /// </summary>
         /// <value>The selected mod.</value>
@@ -514,10 +477,10 @@ namespace IronyModManager.ViewModels.Controls
         #region Methods
 
         /// <summary>
-        /// Gets the context menu mod mod steam URL.
+        /// Gets the context menu mod steam URL.
         /// </summary>
         /// <returns>System.String.</returns>
-        public virtual string GetContextMenuModModSteamUrl()
+        public virtual string GetContextMenuModSteamUrl()
         {
             if (ContextMenuMod != null)
             {
@@ -529,10 +492,10 @@ namespace IronyModManager.ViewModels.Controls
         }
 
         /// <summary>
-        /// Gets the context menu mod mod URL.
+        /// Gets the context menu mod URL.
         /// </summary>
         /// <returns>System.String.</returns>
-        public virtual string GetContextMenuModModUrl()
+        public virtual string GetContextMenuModUrl()
         {
             if (ContextMenuMod != null)
             {
@@ -544,16 +507,34 @@ namespace IronyModManager.ViewModels.Controls
         }
 
         /// <summary>
+        /// Sets or clears the local display-name override for the context-menu mod.
+        /// </summary>
+        /// <param name="nameOverride">The requested alias, or null/whitespace to clear it.</param>
+        /// <returns><c>true</c> when the mod has a stable alias identity.</returns>
+        public virtual bool SetContextMenuModAlias(string nameOverride)
+        {
+            if (ContextMenuMod == null || !modService.SetModAlias(ContextMenuMod, nameOverride))
+            {
+                return false;
+            }
+
+            foreach (var mod in Mods?.Where(p => p.Game.Equals(ContextMenuMod.Game, StringComparison.OrdinalIgnoreCase) &&
+                                                 p.DescriptorFile.Equals(ContextMenuMod.DescriptorFile, StringComparison.OrdinalIgnoreCase)) ?? [])
+            {
+                mod.NameOverride = ContextMenuMod.NameOverride;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Called when [locale changed].
         /// </summary>
         /// <param name="newLocale">The new locale.</param>
         /// <param name="oldLocale">The old locale.</param>
         public override void OnLocaleChanged(string newLocale, string oldLocale)
         {
-            ModVersionSortOrder.Text = ModVersion;
-            ModNameSortOrder.Text = ModName;
-            ModSelectedSortOrder.Text = ModSelected;
-            FilterMods.WatermarkText = FilterModsWatermark;
+            presentationCoordinator.UpdateLocalization(ModName, ModVersion, ModSelected, FilterModsWatermark);
 
             base.OnLocaleChanged(newLocale, oldLocale);
         }
@@ -565,9 +546,39 @@ namespace IronyModManager.ViewModels.Controls
         /// <returns>A Task representing the asynchronous operation.</returns>
         public virtual async Task RefreshModsAsync(bool skipOverlay = false)
         {
+            await RefreshModsInternalAsync(skipOverlay);
+        }
+
+        /// <summary>
+        /// Synchronizes new mod descriptors while an explicit custom-directory revalidation owns the game.
+        /// </summary>
+        public virtual async Task<bool> SynchronizeNewModsAsync(IGame game, GameStateLockInfo revalidationLock)
+        {
+            return await modService.InstallModsAsync(game, Mods, revalidationLock);
+        }
+
+        /// <summary>
+        /// Revalidates installed mods after an explicit filesystem configuration change.
+        /// </summary>
+        public virtual async Task<bool> RevalidateModsAsync(IGame game, GameStateLockInfo revalidationLock,
+            Func<bool> isCurrentRevalidation, bool skipOverlay = false)
+        {
+            return await RefreshModsInternalAsync(skipOverlay, revalidationLock, isCurrentRevalidation, game);
+        }
+
+        private async Task<bool> RefreshModsInternalAsync(bool skipOverlay,
+            GameStateLockInfo revalidationLock = null, Func<bool> isCurrentRevalidation = null, IGame game = null)
+        {
             RefreshingMods = true;
             var previousMods = Mods;
-            await BindAsync(skipOverlay: skipOverlay);
+            var authoritative = await BindAsync(game, skipOverlay: skipOverlay, revalidationLock: revalidationLock,
+                isCurrentRevalidation: isCurrentRevalidation);
+            if (isCurrentRevalidation != null && !isCurrentRevalidation())
+            {
+                RefreshingMods = false;
+                return false;
+            }
+
             if (Mods?.Count() > 0 && previousMods?.Count() > 0)
             {
                 foreach (var item in previousMods.Where(p => p.IsSelected))
@@ -581,6 +592,7 @@ namespace IronyModManager.ViewModels.Controls
             }
 
             RefreshingMods = false;
+            return authoritative;
         }
 
         /// <summary>
@@ -588,8 +600,7 @@ namespace IronyModManager.ViewModels.Controls
         /// </summary>
         protected virtual void ApplyDefaultSort()
         {
-            var sortModel = sortOrders.FirstOrDefault(p => p.Value.SortOrder != Implementation.SortOrder.None);
-            ApplySort(sortModel.Key);
+            ApplySort(presentationCoordinator.GetActiveSortKey());
         }
 
         /// <summary>
@@ -598,19 +609,18 @@ namespace IronyModManager.ViewModels.Controls
         /// <param name="sortBy">The sort by.</param>
         protected virtual void ApplySort(string sortBy)
         {
-            var sortModel = sortOrders.FirstOrDefault(p => p.Key == sortBy);
-            switch (sortModel.Key)
+            switch (sortBy)
             {
-                case ModNameKey:
-                    SortFunction(x => x.Name, sortModel.Key);
+                case InstalledModsPresentationCoordinator.ModNameKey:
+                    SortFunction(x => x.Name, sortBy);
                     break;
 
-                case ModSelectedKey:
-                    SortFunction(x => x.IsSelected, sortModel.Key);
+                case InstalledModsPresentationCoordinator.ModSelectedKey:
+                    SortFunction(x => x.IsSelected, sortBy);
                     break;
 
-                case ModVersionKey:
-                    SortFunction(x => x.VersionData, sortModel.Key);
+                case InstalledModsPresentationCoordinator.ModVersionKey:
+                    SortFunction(x => x.VersionData, sortBy);
                     break;
             }
         }
@@ -631,14 +641,15 @@ namespace IronyModManager.ViewModels.Controls
         /// <param name="game">The game.</param>
         /// <param name="skipOverlay">if set to <c>true</c> [skip overlay].</param>
         /// <returns>Task.</returns>
-        protected virtual async Task BindAsync(IGame game = null, bool skipOverlay = false)
+        protected virtual async Task<bool> BindAsync(IGame game = null, bool skipOverlay = false,
+            GameStateLockInfo revalidationLock = null, Func<bool> isCurrentRevalidation = null)
         {
             var raiseGameChanged = game != null;
             GameChangedRefresh = false;
-            var id = idGenerator.GetNextId();
+            var id = interaction.BeginOperation();
             if (!skipOverlay)
             {
-                await TriggerOverlayAsync(id, true, localizationManager.GetResource(LocalizationResources.Installed_Mods.LoadingMods));
+                await TriggerOverlayAsync(id, true, interaction.GetText(LocalizationResources.Installed_Mods.LoadingMods));
             }
 
             game ??= gameService.GetSelected();
@@ -650,27 +661,37 @@ namespace IronyModManager.ViewModels.Controls
                     GameChangedRefresh = true;
                 }
 
-                var mods = await Task.Run(async () => await modService.GetInstalledModsAsync(game));
+                var refreshResult = await Task.Run(async () => revalidationLock != null
+                    ? await modService.RevalidateInstalledModsAsync(game, revalidationLock)
+                    : await modService.RefreshInstalledModsAsync(game));
                 await Task.Delay(100);
-                Mods = mods.ToObservableCollection();
-                AllMods = Mods.ToHashSet();
-                var invalidMods = AllMods.Where(p => !p.IsValid);
-                if (invalidMods.Any())
+                bool ownsAuthority() => isCurrentRevalidation?.Invoke() ?? !gameStateSafetyService.IsLocked(game);
+                if (!ownsAuthority())
                 {
-                    await Dispatcher.UIThread.SafeInvokeAsync(async () =>
+                    if (!skipOverlay)
                     {
-                        await RemoveInvalidModsPromptAsync(invalidMods).ConfigureAwait(false);
-                    });
+                        await TriggerOverlayAsync(id, false);
+                    }
+
+                    return false;
                 }
 
-                var searchString = FilterMods.Text ?? string.Empty;
-                if (Mods != null && Mods.Any(p => p.AchievementStatus == AchievementStatus.NotEvaluated) && modService.QueryContainsAchievements(searchString))
+                LastRefreshAuthoritative = refreshResult.IsAuthoritative;
+                if (!IsRefreshAuthoritative(refreshResult))
                 {
-                    await MessageBus.PublishAsync(new EvalModAchievementsCompatibilityEvent(Mods, skipOverlay, true));
+                    if (!skipOverlay)
+                    {
+                        await TriggerOverlayAsync(id, false);
+                    }
+
+                    return false;
                 }
 
+                Mods = refreshResult.Mods.ToObservableCollection();
+                AllMods = Mods.ToHashSet();
+                var searchString = FilterMods.Text ?? string.Empty;
                 FilteredMods = modService.FilterMods(Mods, searchString).ToObservableCollection();
-                AllModsEnabled = FilteredMods.Where(p => p.IsValid).Any() && FilteredMods.Where(p => p.IsValid).All(p => p.IsSelected);
+                AllModsEnabled = FilteredMods.Any(p => p.IsValid) && FilteredMods.Where(p => p.IsValid).All(p => p.IsSelected);
 
                 if (Disposables != null)
                 {
@@ -685,10 +706,27 @@ namespace IronyModManager.ViewModels.Controls
                     }).DisposeWith(Disposables);
                 }
 
-                var state = appStateService.Get();
-                InitSortersAndFilters(state);
+                presentationCoordinator.Initialize(ModName, ModVersion, ModSelected, FilterModsWatermark);
 
                 ApplyDefaultSort();
+
+                var invalidMods = AllMods.Where(p => !p.IsValid).ToList();
+                if (invalidMods.Count != 0 && ownsAuthority())
+                {
+                    await Dispatcher.UIThread.SafeInvokeAsync(async () =>
+                    {
+                        if (ownsAuthority())
+                        {
+                            await RemoveInvalidModsPromptAsync(invalidMods).ConfigureAwait(false);
+                        }
+                    });
+                }
+
+                if (ownsAuthority() && Mods.Any(p => p.AchievementStatus == AchievementStatus.NotEvaluated) &&
+                    modService.QueryContainsAchievements(searchString))
+                {
+                    await MessageBus.PublishAsync(new EvalModAchievementsCompatibilityEvent(Mods, skipOverlay, true));
+                }
             }
             else
             {
@@ -700,6 +738,13 @@ namespace IronyModManager.ViewModels.Controls
             {
                 await TriggerOverlayAsync(id, false);
             }
+
+            return game == null || LastRefreshAuthoritative;
+        }
+
+        private static bool IsRefreshAuthoritative(InstalledModsResult result)
+        {
+            return result?.IsAuthoritative == true;
         }
 
         /// <summary>
@@ -720,8 +765,8 @@ namespace IronyModManager.ViewModels.Controls
         /// <returns>A Task representing the asynchronous operation.</returns>
         protected virtual async Task CheckNewModsAsync()
         {
-            var id = idGenerator.GetNextId();
-            await TriggerOverlayAsync(id, true, localizationManager.GetResource(LocalizationResources.Installed_Mods.RefreshingModList));
+            var id = interaction.BeginOperation();
+            await TriggerOverlayAsync(id, true, interaction.GetText(LocalizationResources.Installed_Mods.RefreshingModList));
             var result = await modService.InstallModsAsync(Mods);
             if (result != null && result.Any(p => p.Invalid))
             {
@@ -729,9 +774,9 @@ namespace IronyModManager.ViewModels.Controls
             }
 
             await RefreshModsAsync();
-            var title = localizationManager.GetResource(LocalizationResources.Notifications.NewDescriptorsChecked.Title);
-            var message = localizationManager.GetResource(LocalizationResources.Notifications.NewDescriptorsChecked.Message);
-            notificationAction.ShowNotification(title, message, NotificationType.Info);
+            var title = interaction.GetText(LocalizationResources.Notifications.NewDescriptorsChecked.Title);
+            var message = interaction.GetText(LocalizationResources.Notifications.NewDescriptorsChecked.Message);
+            interaction.Notify(title, message, NotificationType.Info);
             await TriggerOverlayAsync(id, false);
         }
 
@@ -744,8 +789,8 @@ namespace IronyModManager.ViewModels.Controls
         {
             if (mods?.Count() > 0)
             {
-                var id = idGenerator.GetNextId();
-                await TriggerOverlayAsync(id, true, localizationManager.GetResource(LocalizationResources.Installed_Mods.RefreshingModList));
+                var id = interaction.BeginOperation();
+                await TriggerOverlayAsync(id, true, interaction.GetText(LocalizationResources.Installed_Mods.RefreshingModList));
                 await modService.DeleteDescriptorsAsync(mods);
                 var result = await modService.InstallModsAsync(Mods);
                 if (result != null && result.Any(p => p.Invalid))
@@ -754,9 +799,9 @@ namespace IronyModManager.ViewModels.Controls
                 }
 
                 await RefreshModsAsync();
-                var title = localizationManager.GetResource(LocalizationResources.Notifications.DescriptorsRefreshed.Title);
-                var message = localizationManager.GetResource(LocalizationResources.Notifications.DescriptorsRefreshed.Message);
-                notificationAction.ShowNotification(title, message, NotificationType.Info);
+                var title = interaction.GetText(LocalizationResources.Notifications.DescriptorsRefreshed.Title);
+                var message = interaction.GetText(LocalizationResources.Notifications.DescriptorsRefreshed.Message);
+                interaction.Notify(title, message, NotificationType.Info);
                 await TriggerOverlayAsync(id, false);
             }
         }
@@ -769,6 +814,12 @@ namespace IronyModManager.ViewModels.Controls
         /// <returns>A Task representing the asynchronous operation.</returns>
         protected virtual async Task EvalModAchievementAsync(IEnumerable<IMod> mods, bool hasPriority = false)
         {
+            var effectiveMods = mods?.Where(p => !p.IsVirtual).ToList() ?? [];
+            if (effectiveMods.Count == 0)
+            {
+                return;
+            }
+
             async Task performEval(CancellationToken token)
             {
                 if (!hasPriority)
@@ -790,70 +841,22 @@ namespace IronyModManager.ViewModels.Controls
 
             evalModToken?.Cancel();
             evalModToken = new CancellationTokenSource();
-            if (mods.Any())
+            IDisposable mutex = null;
+            if (hasPriority)
             {
-                IDisposable mutex = null;
-                if (hasPriority)
-                {
-                    mutex = await evalLock.LockAsync();
-                }
-
-                mods.ToList().ForEach(m => evalModsQueue.Add(m));
-                try
-                {
-                    await performEval(evalModToken.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                }
-
-                mutex?.Dispose();
-            }
-        }
-
-        /// <summary>
-        /// Initializes the default sort order.
-        /// </summary>
-        /// <param name="dictKey">The dictionary key.</param>
-        /// <param name="vm">The vm.</param>
-        /// <param name="defaultOrder">The default order.</param>
-        /// <param name="text">The text.</param>
-        /// <param name="appState">State of the application.</param>
-        protected virtual void InitDefaultSortOrder(string dictKey, SortOrderControlViewModel vm, Implementation.SortOrder defaultOrder, string text, IAppState appState)
-        {
-            if (!string.IsNullOrWhiteSpace(appState.InstalledModsSortColumn) && Enum.IsDefined(typeof(Implementation.SortOrder), appState.InstalledModsSortMode))
-            {
-                if (dictKey.Equals(appState.InstalledModsSortColumn))
-                {
-                    var sort = (Implementation.SortOrder)appState.InstalledModsSortMode;
-                    vm.SortOrder = sort;
-                }
-                else
-                {
-                    vm.SortOrder = Implementation.SortOrder.None;
-                }
-            }
-            else
-            {
-                vm.SortOrder = defaultOrder;
+                mutex = await evalLock.LockAsync();
             }
 
-            vm.Text = text;
-            sortOrders[dictKey] = vm;
-        }
+            effectiveMods.ForEach(m => evalModsQueue.Add(m));
+            try
+            {
+                await performEval(evalModToken.Token);
+            }
+            catch (OperationCanceledException)
+            {
+            }
 
-        /// <summary>
-        /// Initializes the sorters and filters.
-        /// </summary>
-        /// <param name="appState">The preferences.</param>
-        protected virtual void InitSortersAndFilters(IAppState appState)
-        {
-            sortOrders = new Dictionary<string, SortOrderControlViewModel>();
-            InitDefaultSortOrder(ModNameKey, ModNameSortOrder, Implementation.SortOrder.Asc, ModName, appState);
-            InitDefaultSortOrder(ModVersionKey, ModVersionSortOrder, Implementation.SortOrder.None, ModVersion, appState);
-            InitDefaultSortOrder(ModSelectedKey, ModSelectedSortOrder, Implementation.SortOrder.None, ModSelected, appState);
-            FilterMods.Text = appState?.InstalledModsSearchTerm;
-            FilterMods.WatermarkText = FilterModsWatermark;
+            mutex?.Dispose();
         }
 
         /// <summary>
@@ -867,9 +870,9 @@ namespace IronyModManager.ViewModels.Controls
             if (mods?.Count() > 0)
             {
                 await modService.LockDescriptorsAsync(mods, isLocked);
-                var title = isLocked ? localizationManager.GetResource(LocalizationResources.Notifications.DescriptorsLocked.Title) : localizationManager.GetResource(LocalizationResources.Notifications.DescriptorsUnlocked.Title);
-                var message = isLocked ? localizationManager.GetResource(LocalizationResources.Notifications.DescriptorsLocked.Message) : localizationManager.GetResource(LocalizationResources.Notifications.DescriptorsUnlocked.Message);
-                notificationAction.ShowNotification(title, message, NotificationType.Info);
+                var title = isLocked ? interaction.GetText(LocalizationResources.Notifications.DescriptorsLocked.Title) : interaction.GetText(LocalizationResources.Notifications.DescriptorsUnlocked.Title);
+                var message = isLocked ? interaction.GetText(LocalizationResources.Notifications.DescriptorsLocked.Message) : interaction.GetText(LocalizationResources.Notifications.DescriptorsUnlocked.Message);
+                interaction.Notify(title, message, NotificationType.Info);
             }
         }
 
@@ -880,46 +883,56 @@ namespace IronyModManager.ViewModels.Controls
         protected override void OnActivated(CompositeDisposable disposables)
         {
             // Set default order and sort order text
-            var state = appStateService.Get();
-            InitSortersAndFilters(state);
+            presentationCoordinator.Initialize(ModName, ModVersion, ModSelected, FilterModsWatermark);
 
             Bind();
 
             this.WhenAnyValue(v => v.ModNameSortOrder.IsActivated, v => v.ModVersionSortOrder.IsActivated, v => v.ModSelectedSortOrder.IsActivated).Where(s => s.Item1 && s.Item2 && s.Item3)
                 .Subscribe(_ =>
                 {
-                    Observable.Merge(ModNameSortOrder.SortCommand.Select(_ => ModNameKey),
-                        ModVersionSortOrder.SortCommand.Select(_ => ModVersionKey),
-                        ModSelectedSortOrder.SortCommand.Select(_ => ModSelectedKey)).Subscribe(s =>
-                    {
-                        ApplySort(s);
-                    }).DisposeWith(disposables);
+                    Observable.Merge(ModNameSortOrder.SortCommand.Select(_ => InstalledModsPresentationCoordinator.ModNameKey),
+                        ModVersionSortOrder.SortCommand.Select(_ => InstalledModsPresentationCoordinator.ModVersionKey),
+                        ModSelectedSortOrder.SortCommand.Select(_ => InstalledModsPresentationCoordinator.ModSelectedKey)).Subscribe(ApplySort).DisposeWith(disposables);
                 }).DisposeWith(disposables);
 
             OpenUrlCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                var url = GetContextMenuModModUrl();
+                var url = GetContextMenuModUrl();
                 if (!string.IsNullOrWhiteSpace(url))
                 {
-                    await appAction.OpenAsync(url).ConfigureAwait(true);
+                    await interaction.OpenAsync(url).ConfigureAwait(true);
                 }
             }).DisposeWith(disposables);
 
             CopyUrlCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                var url = GetContextMenuModModUrl();
+                var url = GetContextMenuModUrl();
                 if (!string.IsNullOrWhiteSpace(url))
                 {
-                    await appAction.CopyAsync(url).ConfigureAwait(true);
+                    await interaction.CopyAsync(url).ConfigureAwait(true);
                 }
             }).DisposeWith(disposables);
 
             OpenInSteamCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                var url = GetContextMenuModModSteamUrl();
+                var url = GetContextMenuModSteamUrl();
                 if (!string.IsNullOrWhiteSpace(url))
                 {
-                    await appAction.OpenAsync(url).ConfigureAwait(true);
+                    var args = gameService.GetLaunchSettings(ActiveGame);
+                    var launchDefault = true;
+                    if (gameService.IsFlatpakSteamGame(args))
+                    {
+                        // ReSharper disable once StringLiteralTypo
+                        if (await interaction.OpenFlatpakAsync("com.valvesoftware.Steam", args.ExecutableLocation))
+                        {
+                            launchDefault = false;
+                        }
+                    }
+
+                    if (launchDefault)
+                    {
+                        await interaction.OpenAsync(url).ConfigureAwait(true);
+                    }
                 }
             }).DisposeWith(disposables);
 
@@ -927,7 +940,7 @@ namespace IronyModManager.ViewModels.Controls
             {
                 if (!string.IsNullOrWhiteSpace(ContextMenuMod?.FullPath))
                 {
-                    await appAction.OpenAsync(ContextMenuMod.FullPath).ConfigureAwait(true);
+                    await interaction.OpenAsync(ContextMenuMod.FullPath).ConfigureAwait(true);
                 }
             }).DisposeWith(disposables);
 
@@ -935,7 +948,7 @@ namespace IronyModManager.ViewModels.Controls
             {
                 if (!string.IsNullOrWhiteSpace(ContextMenuMod?.FullPath))
                 {
-                    appAction.CopyAsync(ContextMenuMod.FullPath).ConfigureAwait(true);
+                    interaction.CopyAsync(ContextMenuMod.FullPath).ConfigureAwait(true);
                 }
             }).DisposeWith(disposables);
 
@@ -1022,12 +1035,12 @@ namespace IronyModManager.ViewModels.Controls
                 await CheckNewModsAsync().ConfigureAwait(true);
             }).DisposeWith(disposables);
 
-            evalModAchievementsCompatibilityHandler.Subscribe(async s =>
+            eventCoordinator.SubscribeAchievementChecks(async s =>
             {
-                var id = idGenerator.GetNextId();
+                var id = interaction.BeginOperation();
                 if (s.ShowOverlay)
                 {
-                    await TriggerOverlayAsync(id, true, localizationManager.GetResource(LocalizationResources.Installed_Mods.LoadingMods));
+                    await TriggerOverlayAsync(id, true, interaction.GetText(LocalizationResources.Installed_Mods.LoadingMods));
                 }
 
                 await EvalModAchievementAsync(s.Mods, s.HasPriority).ConfigureAwait(false);
@@ -1070,9 +1083,9 @@ namespace IronyModManager.ViewModels.Controls
                 messages.Add($"{item.Name} ({item.DescriptorFile})");
             }
 
-            var title = localizationManager.GetResource(LocalizationResources.Installed_Mods.InvalidMods.Title);
-            var message = IronyFormatter.Format(localizationManager.GetResource(LocalizationResources.Installed_Mods.InvalidMods.Message), new { Mods = string.Join(Environment.NewLine, messages), Environment.NewLine });
-            if (await notificationAction.ShowPromptAsync(title, title, message, NotificationType.Warning))
+            var title = interaction.GetText(LocalizationResources.Installed_Mods.InvalidMods.Title);
+            var message = IronyFormatter.Format(interaction.GetText(LocalizationResources.Installed_Mods.InvalidMods.Message), new { Mods = string.Join(Environment.NewLine, messages), Environment.NewLine });
+            if (await interaction.PromptAsync(title, title, message, NotificationType.Warning))
             {
                 await DeleteDescriptorAsync(mods);
             }
@@ -1088,7 +1101,7 @@ namespace IronyModManager.ViewModels.Controls
         /// <returns>IComparer&lt;T&gt;.</returns>
         protected virtual IComparer<T> ResolveComparer<T>(string dictKey)
         {
-            if (dictKey.Equals(ModNameKey))
+            if (dictKey.Equals(InstalledModsPresentationCoordinator.ModNameKey))
             {
                 return (IComparer<T>)StringComparer.OrdinalIgnoreCase;
             }
@@ -1101,12 +1114,7 @@ namespace IronyModManager.ViewModels.Controls
         /// </summary>
         protected virtual void SaveState()
         {
-            var state = appStateService.Get();
-            state.InstalledModsSearchTerm = FilterMods.Text;
-            var sortModel = sortOrders.FirstOrDefault(p => p.Value.SortOrder != Implementation.SortOrder.None);
-            state.InstalledModsSortColumn = sortModel.Key;
-            state.InstalledModsSortMode = (int)sortModel.Value.SortOrder;
-            appStateService.Save(state);
+            presentationCoordinator.SaveState();
         }
 
         /// <summary>
@@ -1116,13 +1124,13 @@ namespace IronyModManager.ViewModels.Controls
         /// <returns>Task.</returns>
         protected virtual async Task ShowInvalidModsNotificationAsync(IReadOnlyCollection<IModInstallationResult> mods)
         {
-            var title = localizationManager.GetResource(LocalizationResources.InvalidModsDetected.Title);
-            var message = localizationManager.GetResource(LocalizationResources.InvalidModsDetected.Message).FormatIronySmart(new { Environment.NewLine, Mods = string.Join(Environment.NewLine, mods.Select(p => p.Path)) });
+            var title = interaction.GetText(LocalizationResources.InvalidModsDetected.Title);
+            var message = interaction.GetText(LocalizationResources.InvalidModsDetected.Message).FormatIronySmart(new { Environment.NewLine, Mods = string.Join(Environment.NewLine, mods.Select(p => p.Path)) });
 
             if (!showingInvalidNotification)
             {
                 showingInvalidNotification = true;
-                await notificationAction.ShowPromptAsync(title, title, message, NotificationType.Error, PromptType.OK);
+                await interaction.PromptAsync(title, title, message, NotificationType.Error, PromptType.OK);
                 showingInvalidNotification = false;
             }
         }
@@ -1137,7 +1145,7 @@ namespace IronyModManager.ViewModels.Controls
         {
             if (FilteredMods != null)
             {
-                var sortOrder = sortOrders[dictKey];
+                var sortOrder = presentationCoordinator.GetSortOrder(dictKey);
                 var comparer = ResolveComparer<T>(dictKey);
                 switch (sortOrder.SortOrder)
                 {
@@ -1172,10 +1180,7 @@ namespace IronyModManager.ViewModels.Controls
                         break;
                 }
 
-                foreach (var sort in sortOrders.Where(p => p.Value != sortOrder))
-                {
-                    sort.Value.SetSortOrder(Implementation.SortOrder.None);
-                }
+                presentationCoordinator.ResetOtherSortOrders(sortOrder);
 
                 SaveState();
             }

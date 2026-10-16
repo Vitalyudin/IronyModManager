@@ -4,37 +4,39 @@
 // Created          : 01-28-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 03-16-2021
+// Last Modified On : 12-03-2025
 // ***********************************************************************
 // <copyright file="StorageTests.cs" company="Mario">
 //     Mario
 // </copyright>
 // <summary></summary>
 // ***********************************************************************
+
 using System;
 using System.Collections.Generic;
-using System.Text;
-using Xunit;
-using Moq;
-using IronyModManager.Models;
-using AutoMapper;
-using IronyModManager.Models.Common;
-using FluentAssertions;
-using SimpleInjector;
-using IronyModManager.DI;
-using IronyModManager.Shared;
-using IronyModManager.Tests.Common;
 using System.Linq;
+using AutoMapper;
+using AwesomeAssertions;
+using IronyModManager.DI;
+using IronyModManager.Models;
+using IronyModManager.Models.Common;
 using IronyModManager.Storage.Common;
+using IronyModManager.Tests.Common;
+using Moq;
+using Xunit;
+
+// ReSharper disable ConvertToLambdaExpression
+
+// ReSharper disable PossibleNullReferenceException
 
 namespace IronyModManager.Storage.Tests
 {
     /// <summary>
     /// Class StorageTests.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0305:Simplify collection initialization", Justification = "Unit test")]
     public class StorageTests
     {
-
         /// <summary>
         /// Defines the test method Should_return_same_preferences_object.
         /// </summary>
@@ -140,6 +142,21 @@ namespace IronyModManager.Storage.Tests
             result.FirstOrDefault().Name.Should().Be("fake");
         }
 
+        [Fact]
+        public void Should_store_and_return_mod_aliases_independently()
+        {
+            DISetup.SetupContainer();
+            var aliases = new List<IModAlias> { new ModAlias { Game = "game", DescriptorFile = "mod/example.mod", NameOverride = "Personal name" } };
+            var storage = new Storage(GetDbMock(), DIResolver.Get<IMapper>());
+
+            storage.SetModAliases(aliases).Should().BeTrue();
+            var result = storage.GetModAliases().Single();
+
+            result.Game.Should().Be("game");
+            result.DescriptorFile.Should().Be("mod/example.mod");
+            result.NameOverride.Should().Be("Personal name");
+        }
+
         /// <summary>
         /// Defines the test method Should_return_same_game_settings_object.
         /// </summary>
@@ -186,17 +203,11 @@ namespace IronyModManager.Storage.Tests
         {
             DISetup.SetupContainer();
             var dbMock = GetDbMock();
-            var newPref = new Preferences()
-            {
-                Locale = "test2"
-            };
+            var newPref = new Preferences { Locale = "test2" };
             var mapper = new Mock<IMapper>();
             mapper.Setup(p => p.Map<IPreferences>(It.IsAny<IPreferences>())).Returns((IPreferences s) =>
             {
-                return new Preferences()
-                {
-                    Locale = s.Locale
-                };
+                return new Preferences { Locale = s.Locale };
             });
             var storage = new Storage(dbMock, mapper.Object);
             storage.SetPreferences(newPref);
@@ -211,20 +222,14 @@ namespace IronyModManager.Storage.Tests
         {
             DISetup.SetupContainer();
             var dbMock = GetDbMock();
-            var state = new AppState()
-            {
-                CollectionModsSearchTerm = "test2"
-            };
+            var state = new AppState { CollectionModsSearchTerm = "test2" };
             var mapper = new Mock<IMapper>();
             mapper.Setup(p => p.Map<IAppState>(It.IsAny<IAppState>())).Returns((IAppState s) =>
             {
-                return new AppState()
-                {
-                    CollectionModsSearchTerm = s.CollectionModsSearchTerm
-                };
+                return new AppState { CollectionModsSearchTerm = s.CollectionModsSearchTerm };
             });
             var storage = new Storage(dbMock, mapper.Object);
-            var result = storage.SetAppState(state);
+            storage.SetAppState(state);
             dbMock.AppState.CollectionModsSearchTerm.Should().Be(state.CollectionModsSearchTerm);
         }
 
@@ -252,16 +257,12 @@ namespace IronyModManager.Storage.Tests
         {
             DISetup.SetupContainer();
             var dbMock = GetDbMock();
-            var newItem = new NotificationPositionType()
-            {
-                Position = Models.Common.NotificationPosition.TopLeft
-            };
+            var newItem = new NotificationPositionType { Position = Models.Common.NotificationPosition.TopLeft };
             var storage = new Storage(dbMock, new Mock<IMapper>().Object);
             storage.RegisterNotificationPosition(newItem);
             dbMock.NotificationPosition.Count.Should().Be(2);
             dbMock.NotificationPosition.FirstOrDefault(p => p.Position == newItem.Position).Should().NotBeNull();
         }
-
 
 
         /// <summary>
@@ -274,29 +275,34 @@ namespace IronyModManager.Storage.Tests
             var dbMock = GetDbMock();
             var key = "test2";
             var storage = new Storage(dbMock, new Mock<IMapper>().Object);
-            var game = new GameType()
+            var game = new GameType
             {
                 Name = key,
                 SteamAppId = 1,
-                ChecksumFolders = new List<string>() { "test" },
-                GameFolders = new List<string>() { "testgame" },
+                ChecksumFolders = new List<string> { "test" },
+                GameFolders = new List<string> { "testgame" },
                 LogLocation = "test.log",
                 UserDirectory = "user_directory",
-                WorkshopDirectory = new List<string>() { "workshop1" },
+                WorkshopDirectory = new List<string> { "workshop1" },
                 BaseSteamGameDirectory = "base",
                 ExecutablePath = "exe",
                 ExecutableArgs = "args",
                 LauncherSettingsFileName = "settings",
                 LauncherSettingsPrefix = "prefix",
                 AdvancedFeatures = GameAdvancedFeatures.ReadOnly,
-                RemoteSteamUserDirectory = new List<string>() { "remotesave" },
+                RemoteSteamUserDirectory = new List<string> { "remotesave" },
                 Abrv = "abrv",
                 ParadoxGameId = "pdxId",
                 DLCContainer = "container",
                 GameIndexCacheVersion = 2,
                 GogAppId = 3,
                 ModDescriptorType = ModDescriptorType.DescriptorMod,
-                SupportedMergeTypes = SupportedMergeTypes.Zip
+                SupportedMergeTypes = SupportedMergeTypes.Zip,
+                DefaultGameBinaryPath = "",
+                SignatureFiles = ["test1.txt"],
+                SupportedOperatingSystems = SupportedOperatingSystems.Windows,
+                SteamRoot = "root",
+                LinuxProtonVersion = "proton_10"
             };
             storage.RegisterGame(game);
             dbMock.Games.Count.Should().Be(2);
@@ -322,6 +328,11 @@ namespace IronyModManager.Storage.Tests
             dbMock.Games.FirstOrDefault(p => p.Name == key).ModDescriptorType.Should().Be(ModDescriptorType.DescriptorMod);
             dbMock.Games.FirstOrDefault(p => p.Name == key).SupportedMergeTypes.HasFlag(SupportedMergeTypes.Zip).Should().BeTrue();
             dbMock.Games.FirstOrDefault(p => p.Name == key).SupportedMergeTypes.HasFlag(SupportedMergeTypes.Basic).Should().BeFalse();
+            dbMock.Games.FirstOrDefault(p => p.Name == key).DefaultGameBinaryPath.Should().Be(string.Empty);
+            dbMock.Games.FirstOrDefault(p => p.Name == key).SignatureFiles.FirstOrDefault().Should().Be("test1.txt");
+            dbMock.Games.FirstOrDefault(p => p.Name == key).SupportedOperatingSystems.HasFlag(SupportedOperatingSystems.Windows).Should().BeTrue();
+            dbMock.Games.FirstOrDefault(p => p.Name == key).SteamRoot.Should().Be("root");
+            dbMock.Games.FirstOrDefault(p => p.Name == key).LinuxProtonVersion.Should().Be("proton_10");
         }
 
         /// <summary>
@@ -332,17 +343,11 @@ namespace IronyModManager.Storage.Tests
         {
             DISetup.SetupContainer();
             var dbMock = GetDbMock();
-            var state = new WindowState()
-            {
-                Height = 300
-            };
+            var state = new WindowState { Height = 300 };
             var mapper = new Mock<IMapper>();
             mapper.Setup(p => p.Map<IWindowState>(It.IsAny<IWindowState>())).Returns((IWindowState s) =>
             {
-                return new WindowState()
-                {
-                    Height = s.Height
-                };
+                return new WindowState { Height = s.Height };
             });
             var storage = new Storage(dbMock, mapper.Object);
             storage.SetWindowState(state);
@@ -357,13 +362,7 @@ namespace IronyModManager.Storage.Tests
         {
             DISetup.SetupContainer();
             var dbMock = GetDbMock();
-            var col = new List<IModCollection>()
-            {
-                new ModCollection()
-                {
-                    Name = "fake2"
-                }
-            };
+            var col = new List<IModCollection> { new ModCollection { Name = "fake2" } };
             var mapper = new Mock<IMapper>();
             mapper.Setup(p => p.Map<IEnumerable<IModCollection>>(It.IsAny<IEnumerable<IModCollection>>())).Returns((IEnumerable<IModCollection> s) =>
             {
@@ -382,10 +381,7 @@ namespace IronyModManager.Storage.Tests
         public void Should_overwrite_and_return_same_preferences_object()
         {
             DISetup.SetupContainer();
-            var newPref = new Preferences()
-            {
-                Locale = "test2"
-            };
+            var newPref = new Preferences { Locale = "test2" };
             var storage = new Storage(GetDbMock(), DIResolver.Get<IMapper>());
             storage.SetPreferences(newPref);
             var pref = storage.GetPreferences();
@@ -399,10 +395,7 @@ namespace IronyModManager.Storage.Tests
         public void Should_overwrite_and_return_same_app_state_object()
         {
             DISetup.SetupContainer();
-            var newState = new AppState()
-            {
-                CollectionModsSearchTerm = "test2"
-            };
+            var newState = new AppState { CollectionModsSearchTerm = "test2" };
             var storage = new Storage(GetDbMock(), DIResolver.Get<IMapper>());
             storage.SetAppState(newState);
             var state = storage.GetAppState();
@@ -416,13 +409,7 @@ namespace IronyModManager.Storage.Tests
         public void Should_overwrite_and_return_same_mod_collection_objects()
         {
             DISetup.SetupContainer();
-            var col = new List<IModCollection>()
-            {
-                new ModCollection()
-                {
-                    Name = "fake2"
-                }
-            };
+            var col = new List<IModCollection> { new ModCollection { Name = "fake2" } };
             var storage = new Storage(GetDbMock(), DIResolver.Get<IMapper>());
             storage.SetModCollections(col);
             var result = storage.GetModCollections();
@@ -437,13 +424,7 @@ namespace IronyModManager.Storage.Tests
         public void Should_overwrite_and_return_same_game_settings_objects()
         {
             DISetup.SetupContainer();
-            var col = new List<IGameSettings>()
-            {
-                new GameSettings()
-                {
-                    Type = "fake2"
-                }
-            };
+            var col = new List<IGameSettings> { new GameSettings { Type = "fake2" } };
             var storage = new Storage(GetDbMock(), DIResolver.Get<IMapper>());
             storage.SetGameSettings(col);
             var result = storage.GetGameSettings();
@@ -480,10 +461,7 @@ namespace IronyModManager.Storage.Tests
         {
             DISetup.SetupContainer();
             var dbMock = GetDbMock();
-            var newItem = new NotificationPositionType()
-            {
-                Position = Models.Common.NotificationPosition.TopLeft
-            };
+            var newItem = new NotificationPositionType { Position = Models.Common.NotificationPosition.TopLeft };
             var mapper = new Mock<IMapper>();
             mapper.Setup(p => p.Map<List<INotificationPositionType>>(It.IsAny<IEnumerable<INotificationPositionType>>())).Returns(() =>
             {
@@ -511,29 +489,34 @@ namespace IronyModManager.Storage.Tests
                 return dbMock.Games.ToList();
             });
             var storage = new Storage(dbMock, mapper.Object);
-            var game = new GameType()
+            var game = new GameType
             {
                 Name = key,
                 SteamAppId = 1,
-                ChecksumFolders = new List<string>() { "test" },
-                GameFolders = new List<string>() { "testgame" },
+                ChecksumFolders = new List<string> { "test" },
+                GameFolders = new List<string> { "testgame" },
                 LogLocation = "test.log",
                 UserDirectory = "user_directory",
-                WorkshopDirectory = new List<string>() { "workshop1" },
+                WorkshopDirectory = new List<string> { "workshop1" },
                 BaseSteamGameDirectory = "base",
                 ExecutablePath = "exe",
                 ExecutableArgs = "args",
                 LauncherSettingsFileName = "settings",
                 LauncherSettingsPrefix = "prefix",
                 AdvancedFeatures = GameAdvancedFeatures.ReadOnly,
-                RemoteSteamUserDirectory = new List<string>() { "remotesave" },
+                RemoteSteamUserDirectory = new List<string> { "remotesave" },
                 Abrv = "abrv",
                 ParadoxGameId = "pdxId",
                 DLCContainer = "container",
                 GameIndexCacheVersion = 2,
                 GogAppId = 3,
                 ModDescriptorType = ModDescriptorType.DescriptorMod,
-                SupportedMergeTypes = SupportedMergeTypes.Basic
+                SupportedMergeTypes = SupportedMergeTypes.Basic,
+                DefaultGameBinaryPath = "",
+                SignatureFiles = ["test1.txt"],
+                SupportedOperatingSystems = SupportedOperatingSystems.Windows,
+                SteamRoot = "root",
+                LinuxProtonVersion = "proton_10"
             };
             storage.RegisterGame(game);
             var result = storage.GetGames();
@@ -560,6 +543,11 @@ namespace IronyModManager.Storage.Tests
             result.FirstOrDefault(p => p.Name == key).ModDescriptorType.Should().Be(ModDescriptorType.DescriptorMod);
             result.FirstOrDefault(p => p.Name == key).SupportedMergeTypes.HasFlag(SupportedMergeTypes.Zip).Should().BeFalse();
             result.FirstOrDefault(p => p.Name == key).SupportedMergeTypes.HasFlag(SupportedMergeTypes.Basic).Should().BeTrue();
+            result.FirstOrDefault(p => p.Name == key).DefaultGameBinaryPath.Should().Be(string.Empty);
+            result.FirstOrDefault(p => p.Name == key).SignatureFiles.FirstOrDefault().Should().Be("test1.txt");
+            result.FirstOrDefault(p => p.Name == key).SupportedOperatingSystems.HasFlag(SupportedOperatingSystems.Windows).Should().BeTrue();
+            result.FirstOrDefault(p => p.Name == key).SteamRoot.Should().Be("root");
+            result.FirstOrDefault(p => p.Name == key).LinuxProtonVersion.Should().Be("proton_10");
         }
 
         /// <summary>
@@ -569,15 +557,11 @@ namespace IronyModManager.Storage.Tests
         public void Should_overwrite_and_return_same_window_state_object()
         {
             DISetup.SetupContainer();
-            var newState = new WindowState()
-            {
-                Height = 300
-            };
+            var newState = new WindowState { Height = 300 };
             var storage = new Storage(GetDbMock(), DIResolver.Get<IMapper>());
             storage.SetWindowState(newState);
             var state = storage.GetWindowState();
             state.Height.Should().Be(newState.Height);
-
         }
 
         /// <summary>
@@ -586,47 +570,16 @@ namespace IronyModManager.Storage.Tests
         /// <returns>Database.</returns>
         private Database GetDbMock()
         {
-            return new Database()
+            return new Database
             {
-                Preferences = new Preferences() { Locale = "test" },
-                WindowState = new WindowState() { IsMaximized = true },
-                Themes = new List<IThemeType>() { new ThemeType()
-                {
-                    Name = "test",
-                    IsDefault = true,
-                } },
-                Games = new List<IGameType>()
-                {
-                    new GameType()
-                    {
-                        Name = "test"
-                    }
-                },
-                AppState = new AppState()
-                {
-                    CollectionModsSearchTerm = "test"
-                },
-                ModCollection = new List<IModCollection>()
-                {
-                    new ModCollection()
-                    {
-                        Name = "fake"
-                    }
-                },
-                GameSettings = new List<IGameSettings>()
-                {
-                    new GameSettings()
-                    {
-                        Type = "fake"
-                    }
-                },
-                NotificationPosition = new List<INotificationPositionType>()
-                {
-                    new NotificationPositionType()
-                    {
-                        Position = Models.Common.NotificationPosition.BottomLeft
-                    }
-                }
+                Preferences = new Preferences { Locale = "test" },
+                WindowState = new WindowState { IsMaximized = true },
+                Themes = new List<IThemeType> { new ThemeType { Name = "test", IsDefault = true } },
+                Games = new List<IGameType> { new GameType { Name = "test" } },
+                AppState = new AppState { CollectionModsSearchTerm = "test" },
+                ModCollection = new List<IModCollection> { new ModCollection { Name = "fake" } },
+                GameSettings = new List<IGameSettings> { new GameSettings { Type = "fake" } },
+                NotificationPosition = new List<INotificationPositionType> { new NotificationPositionType { Position = Models.Common.NotificationPosition.BottomLeft } }
             };
         }
     }

@@ -4,7 +4,7 @@
 // Created          : 01-11-2020
 //
 // Last Modified By : Mario
-// Last Modified On : 10-28-2022
+// Last Modified On : 12-05-2025
 // ***********************************************************************
 // <copyright file="Storage.cs" company="Mario">
 //     Mario
@@ -15,6 +15,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using AutoMapper;
 using IronyModManager.DI;
 using IronyModManager.Models.Common;
@@ -28,7 +29,8 @@ namespace IronyModManager.Storage
     /// Implements the <see cref="IronyModManager.Storage.Common.IStorageProvider" />
     /// </summary>
     /// <seealso cref="IronyModManager.Storage.Common.IStorageProvider" />
-    public class Storage : IStorageProvider
+    /// <remarks>Initializes a new instance of the <see cref="Storage" /> class.</remarks>
+    public class Storage(IDatabase database, IMapper mapper) : IStorageProvider
     {
         #region Fields
 
@@ -44,34 +46,19 @@ namespace IronyModManager.Storage
 
         #endregion Fields
 
-        #region Constructors
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Storage" /> class.
-        /// </summary>
-        /// <param name="database">The database.</param>
-        /// <param name="mapper">The mapper.</param>
-        public Storage(IDatabase database, IMapper mapper)
-        {
-            Database = database;
-            Mapper = mapper;
-        }
-
-        #endregion Constructors
-
         #region Properties
 
         /// <summary>
         /// Gets the database.
         /// </summary>
         /// <value>The database.</value>
-        protected IDatabase Database { get; private set; }
+        protected IDatabase Database { get; } = database;
 
         /// <summary>
         /// Gets the mapper.
         /// </summary>
         /// <value>The mapper.</value>
-        protected IMapper Mapper { get; private set; }
+        protected IMapper Mapper { get; } = mapper;
 
         #endregion Properties
 
@@ -129,6 +116,15 @@ namespace IronyModManager.Storage
             }
         }
 
+        /// <inheritdoc />
+        public virtual IEnumerable<IModAlias> GetModAliases()
+        {
+            lock (dbLock)
+            {
+                return Mapper.Map<List<IModAlias>>(Database.ModAliases);
+            }
+        }
+
         /// <summary>
         /// Gets the notification positions.
         /// </summary>
@@ -161,7 +157,7 @@ namespace IronyModManager.Storage
         /// <returns>System.String.</returns>
         public virtual string GetRootStoragePath()
         {
-            return JsonStore.RootPaths.FirstOrDefault();
+            return JsonStore.RootPath;
         }
 
         /// <summary>
@@ -204,14 +200,24 @@ namespace IronyModManager.Storage
                 {
                     throw new InvalidOperationException($"{gameType?.Name} game is already registered or invalid registration.");
                 }
+
+                var canAdd = (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && gameType.SupportedOperatingSystems.HasFlag(SupportedOperatingSystems.Windows)) ||
+                             (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && gameType.SupportedOperatingSystems.HasFlag(SupportedOperatingSystems.Linux)) ||
+                             (RuntimeInformation.IsOSPlatform(OSPlatform.OSX) && gameType.SupportedOperatingSystems.HasFlag(SupportedOperatingSystems.OSX));
+
+                if (!canAdd)
+                {
+                    return false;
+                }
+
                 var game = DIResolver.Get<IGameType>();
                 game.Name = gameType.Name;
                 game.UserDirectory = gameType.UserDirectory ?? string.Empty;
                 game.SteamAppId = gameType.SteamAppId;
-                game.WorkshopDirectory = gameType.WorkshopDirectory ?? new List<string>();
+                game.WorkshopDirectory = gameType.WorkshopDirectory ?? [];
                 game.LogLocation = gameType.LogLocation;
-                game.ChecksumFolders = gameType.ChecksumFolders ?? new List<string>();
-                game.GameFolders = gameType.GameFolders ?? new List<string>();
+                game.ChecksumFolders = gameType.ChecksumFolders ?? [];
+                game.GameFolders = gameType.GameFolders ?? [];
                 game.BaseSteamGameDirectory = gameType.BaseSteamGameDirectory ?? string.Empty;
                 game.ExecutablePath = gameType.ExecutablePath ?? string.Empty;
                 game.ExecutableArgs = gameType.ExecutableArgs ?? string.Empty;
@@ -220,12 +226,17 @@ namespace IronyModManager.Storage
                 game.AdvancedFeatures = gameType.AdvancedFeatures;
                 game.GameIndexCacheVersion = gameType.GameIndexCacheVersion;
                 game.ParadoxGameId = gameType.ParadoxGameId;
-                game.RemoteSteamUserDirectory = gameType.RemoteSteamUserDirectory ?? new List<string>();
+                game.RemoteSteamUserDirectory = gameType.RemoteSteamUserDirectory ?? [];
                 game.Abrv = gameType.Abrv ?? string.Empty;
                 game.DLCContainer = gameType.DLCContainer ?? string.Empty;
                 game.GogAppId = gameType.GogAppId;
                 game.SupportedMergeTypes = gameType.SupportedMergeTypes;
                 game.ModDescriptorType = gameType.ModDescriptorType;
+                game.DefaultGameBinaryPath = gameType.DefaultGameBinaryPath;
+                game.SignatureFiles = gameType.SignatureFiles;
+                game.SupportedOperatingSystems = gameType.SupportedOperatingSystems;
+                game.SteamRoot = gameType.SteamRoot;
+                game.LinuxProtonVersion = gameType.LinuxProtonVersion;
                 Database.Games.Add(game);
                 return true;
             }
@@ -245,6 +256,7 @@ namespace IronyModManager.Storage
                 {
                     throw new InvalidOperationException("Notification position is null or already registered.");
                 }
+
                 var model = DIResolver.Get<INotificationPositionType>();
                 model.IsDefault = notificationPosition.IsDefault;
                 model.Position = notificationPosition.Position;
@@ -269,10 +281,12 @@ namespace IronyModManager.Storage
                 {
                     throw new InvalidOperationException("There is already a default theme registered.");
                 }
+
                 if (Database.Themes.Any(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
                 {
                     throw new InvalidOperationException($"{name} theme is already registered.");
                 }
+
                 var themeType = DIResolver.Get<IThemeType>();
                 themeType.IsDefault = isDefault;
                 themeType.Name = name;
@@ -295,6 +309,7 @@ namespace IronyModManager.Storage
                 {
                     Database.AppState = data;
                 }
+
                 return true;
             }
         }
@@ -313,6 +328,7 @@ namespace IronyModManager.Storage
                 {
                     Database.GameSettings = data;
                 }
+
                 return true;
             }
         }
@@ -331,6 +347,22 @@ namespace IronyModManager.Storage
                 {
                     Database.ModCollection = data;
                 }
+
+                return true;
+            }
+        }
+
+        /// <inheritdoc />
+        public virtual bool SetModAliases(IEnumerable<IModAlias> modAliases)
+        {
+            lock (dbLock)
+            {
+                var data = Mapper.Map<List<IModAlias>>(modAliases);
+                if (IsDifferent(data, Database.ModAliases))
+                {
+                    Database.ModAliases = data;
+                }
+
                 return true;
             }
         }
@@ -349,6 +381,7 @@ namespace IronyModManager.Storage
                 {
                     Database.Preferences = data;
                 }
+
                 return true;
             }
         }
@@ -367,6 +400,7 @@ namespace IronyModManager.Storage
                 {
                     Database.WindowState = data;
                 }
+
                 return true;
             }
         }
@@ -391,12 +425,8 @@ namespace IronyModManager.Storage
         /// <returns>CompareLogic.</returns>
         private static CompareLogic GetComparer()
         {
-            if (compareLogic == null)
-            {
-                compareLogic = new CompareLogic();
-                compareLogic.Config.IgnoreConcreteTypes = true;
-                compareLogic.Config.IgnoreObjectTypes = true;
-            }
+            compareLogic ??= new CompareLogic { Config = { IgnoreConcreteTypes = true, IgnoreObjectTypes = true } };
+
             return compareLogic;
         }
 

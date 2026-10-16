@@ -4,13 +4,14 @@
 // Created          : 02-14-2021
 //
 // Last Modified By : Mario
-// Last Modified On : 10-29-2022
+// Last Modified On : 12-06-2025
 // ***********************************************************************
 // <copyright file="DLCService.cs" company="Mario">
 //     Mario
 // </copyright>
 // <summary></summary>
 // ***********************************************************************
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -23,6 +24,7 @@ using IronyModManager.Models.Common;
 using IronyModManager.Parser.Common.DLC;
 using IronyModManager.Services.Common;
 using IronyModManager.Services.Resolver;
+using IronyModManager.Shared.Models;
 using IronyModManager.Shared.Cache;
 using IronyModManager.Storage.Common;
 
@@ -35,7 +37,9 @@ namespace IronyModManager.Services
     /// </summary>
     /// <seealso cref="IronyModManager.Services.BaseService" />
     /// <seealso cref="IronyModManager.Services.Common.IDLCService" />
-    public class DLCService : BaseService, IDLCService
+    /// <remarks>Initializes a new instance of the <see cref="DLCService" /> class.</remarks>
+    public class DLCService(IDLCExporter dlcExporter, ICache cache, IReader reader, IDLCParser dlcParser, IStorageProvider storage, IMapper mapper,
+        IGameStateSafetyService gameStateSafetyService) : BaseService(storage, mapper), IDLCService
     {
         #region Fields
 
@@ -47,56 +51,41 @@ namespace IronyModManager.Services
         /// <summary>
         /// The cache
         /// </summary>
-        private readonly ICache cache;
+        private readonly ICache cache = cache;
 
         /// <summary>
         /// The DLC directories
         /// </summary>
-        private readonly string[] DLCDirectories = new string[] { GameRootPathResolver.DLCFolder, "builtin_dlc" };
+        private readonly string[] dlcDirectories = [GameRootPathResolver.DLCFolder, "builtin_dlc"];
 
         /// <summary>
         /// The DLC exporter
         /// </summary>
-        private readonly IDLCExporter dlcExporter;
+        private readonly IDLCExporter dlcExporter = dlcExporter;
 
         /// <summary>
         /// The DLC parser
         /// </summary>
-        private readonly IDLCParser dlcParser;
+        private readonly IDLCParser dlcParser = dlcParser;
 
         /// <summary>
         /// The path resolver
         /// </summary>
-        private readonly GameRootPathResolver pathResolver;
+#pragma warning disable CA1859
+        private readonly IGameRootPathResolver pathResolver = new GameRootPathResolver();
+#pragma warning restore CA1859
 
         /// <summary>
         /// The reader
         /// </summary>
-        private readonly IReader reader;
-
-        #endregion Fields
-
-        #region Constructors
+        private readonly IReader reader = reader;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="DLCService" /> class.
+        /// The per-game filesystem safety state.
         /// </summary>
-        /// <param name="dlcExporter">The DLC exporter.</param>
-        /// <param name="cache">The cache.</param>
-        /// <param name="reader">The reader.</param>
-        /// <param name="dlcParser">The DLC parser.</param>
-        /// <param name="storage">The storage.</param>
-        /// <param name="mapper">The mapper.</param>
-        public DLCService(IDLCExporter dlcExporter, ICache cache, IReader reader, IDLCParser dlcParser, IStorageProvider storage, IMapper mapper) : base(storage, mapper)
-        {
-            this.dlcExporter = dlcExporter;
-            this.reader = reader;
-            this.dlcParser = dlcParser;
-            this.cache = cache;
-            pathResolver = new GameRootPathResolver();
-        }
+        private readonly IGameStateSafetyService gameStateSafetyService = gameStateSafetyService;
 
-        #endregion Constructors
+        #endregion Fields
 
         #region Methods
 
@@ -106,19 +95,32 @@ namespace IronyModManager.Services
         /// <param name="game">The game.</param>
         /// <param name="dlc">The DLC.</param>
         /// <returns>Task&lt;System.Boolean&gt;.</returns>
-        public virtual Task<bool> ExportAsync(IGame game, IReadOnlyCollection<IDLC> dlc)
+        public virtual async Task<bool> ExportAsync(IGame game, IReadOnlyCollection<IDLC> dlc)
         {
-            if (game != null && (dlc?.Any()).GetValueOrDefault())
+            if (game != null && dlc != null && dlc.Count != 0)
             {
                 var disabledDLC = dlc.Where(p => !p.IsEnabled).ToList();
-                return dlcExporter.ExportDLCAsync(new DLCParameters()
+                var parameters = new DLCParameters
                 {
                     RootPath = game.UserDirectory,
                     DLC = disabledDLC,
                     DescriptorType = MapDescriptorType(game.ModDescriptorType)
-                });
+                };
+                var sourceAvailable = await gameStateSafetyService.ExecuteReadAsync(game, async () =>
+                {
+                    _ = await dlcExporter.GetDisabledDLCAsync(parameters);
+                    return true;
+                }, false, "Read DLC state for export");
+                if (!sourceAvailable)
+                {
+                    return false;
+                }
+
+                return await gameStateSafetyService.ExecuteMutationAsync(game,
+                    () => dlcExporter.ExportDLCAsync(parameters), false, "Export DLC state");
             }
-            return Task.FromResult(false);
+
+            return false;
         }
 
         /// <summary>
@@ -126,44 +128,55 @@ namespace IronyModManager.Services
         /// </summary>
         /// <param name="game">The game.</param>
         /// <returns>Task&lt;IDLC&gt;.</returns>
-        public virtual Task<IReadOnlyCollection<IDLC>> GetAsync(IGame game)
+        public virtual async Task<IReadOnlyCollection<IDLC>> GetAsync(IGame game)
         {
-            if (game != null)
+            if (game == null)
             {
-                var cached = cache.Get<DLCCacheHolder>(new CacheGetParameters() { Region = CacheRegion, Key = game.Type });
-                var exeLoc = !string.IsNullOrWhiteSpace(game.ExecutableLocation) ? game.ExecutableLocation : string.Empty;
-                if (cached != null && cached.GameExe.Equals(exeLoc))
+                return [];
+            }
+
+            var cached = cache.Get<DLCCacheHolder>(new CacheGetParameters { Region = CacheRegion, Key = game.Type });
+            var exeLoc = !string.IsNullOrWhiteSpace(game.ExecutableLocation) ? game.ExecutableLocation : string.Empty;
+            if (cached != null && cached.GameExe.Equals(exeLoc))
+            {
+                return cached.DLC;
+            }
+
+            if (gameStateSafetyService.IsLocked(game))
+            {
+                return cached?.DLC ?? [];
+            }
+
+            return await gameStateSafetyService.ExecuteReadAsync(game, () => GetInternalAsync(game), cached?.DLC,
+                "Read DLC catalog") ?? [];
+        }
+
+        private Task<IReadOnlyCollection<IDLC>> GetInternalAsync(IGame game)
+        {
+            var result = new List<IDLC>();
+            if (!string.IsNullOrWhiteSpace(game.ExecutableLocation))
+            {
+                var cleanedExePath = pathResolver.GetPath(game);
+                if (!string.IsNullOrWhiteSpace(cleanedExePath))
                 {
-                    return Task.FromResult((IReadOnlyCollection<IDLC>)cached.DLC);
-                }
-                var result = new List<IDLC>();
-                if (!string.IsNullOrWhiteSpace(game.ExecutableLocation))
-                {
-                    var cleanedExePath = pathResolver.GetPath(game);
-                    if (!string.IsNullOrWhiteSpace(cleanedExePath))
+                    foreach (var dlcFolder in dlcDirectories)
                     {
-                        foreach (var dlcFolder in DLCDirectories)
+                        var directory = Path.Combine(cleanedExePath, pathResolver.ResolveDLCDirectory(game.DLCContainer, dlcFolder));
+                        if (Directory.Exists(directory))
                         {
-                            var directory = Path.Combine(cleanedExePath, pathResolver.ResolveDLCDirectory(game.DLCContainer, dlcFolder));
-                            if (Directory.Exists(directory))
+                            var infos = reader.Read(directory);
+                            if (infos != null && infos.Any())
                             {
-                                var infos = reader.Read(directory);
-                                if (infos != null && infos.Any())
-                                {
-                                    foreach (var item in infos)
-                                    {
-                                        var dlcObject = dlcParser.Parse(Path.Combine(dlcFolder, item.FileName), item.Content, MapDescriptorModType(game.ModDescriptorType));
-                                        result.Add(Mapper.Map<IDLC>(dlcObject));
-                                    }
-                                }
+                                result.AddRange(infos.Select(item => dlcParser.Parse(Path.Combine(dlcFolder, item.FileName), item.Content, MapDescriptorModType(game.ModDescriptorType))).Select(dlcObject => Mapper.Map<IDLC>(dlcObject)));
                             }
                         }
                     }
-                    cache.Set(new CacheAddParameters<DLCCacheHolder>() { Region = CacheRegion, Key = game.Type, Value = new DLCCacheHolder(result, game.ExecutableLocation) });
                 }
-                return Task.FromResult((IReadOnlyCollection<IDLC>)result);
+
+                cache.Set(new CacheAddParameters<DLCCacheHolder> { Region = CacheRegion, Key = game.Type, Value = new DLCCacheHolder(result, game.ExecutableLocation) });
             }
-            return Task.FromResult((IReadOnlyCollection<IDLC>)new List<IDLC>());
+
+            return Task.FromResult<IReadOnlyCollection<IDLC>>(result);
         }
 
         /// <summary>
@@ -174,38 +187,25 @@ namespace IronyModManager.Services
         /// <returns>Task&lt;System.Boolean&gt;.</returns>
         public virtual async Task<bool> SyncStateAsync(IGame game, IReadOnlyCollection<IDLC> dlc)
         {
-            if (game != null && (dlc?.Any()).GetValueOrDefault())
+            if (game != null && dlc != null && dlc.Count != 0)
             {
+                var disabledDLC = await dlcExporter.GetDisabledDLCAsync(new DLCParameters { RootPath = game.UserDirectory, DescriptorType = MapDescriptorType(game.ModDescriptorType) });
+
+                var disabledPaths = disabledDLC?.Select(p => p.Path).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+                var disabledAppIds = disabledDLC?.Select(p => p.AppId).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+
                 foreach (var item in dlc)
                 {
-                    item.IsEnabled = true;
-                }
-                var disabledDLC = await dlcExporter.GetDisabledDLCAsync(new DLCParameters()
-                {
-                    RootPath = game.UserDirectory,
-                    DescriptorType = MapDescriptorType(game.ModDescriptorType)
-                });
-                if ((disabledDLC?.Any()).GetValueOrDefault())
-                {
-                    foreach (var item in disabledDLC)
+                    item.IsEnabled = game.ModDescriptorType switch
                     {
-                        IDLC matchedDLC;
-                        if (game.ModDescriptorType == ModDescriptorType.DescriptorMod)
-                        {
-                            matchedDLC = dlc.FirstOrDefault(p => p.Path.Equals(item.Path, StringComparison.OrdinalIgnoreCase));
-                        }
-                        else
-                        {
-                            matchedDLC = dlc.FirstOrDefault(p => p.AppId.Equals(item.AppId, StringComparison.OrdinalIgnoreCase));
-                        }
-                        if (matchedDLC != null)
-                        {
-                            matchedDLC.IsEnabled = false;
-                        }
-                    }
+                        ModDescriptorType.DescriptorMod => !disabledPaths.Contains(item.Path),
+                        _ => !disabledAppIds.Contains(item.AppId)
+                    };
                 }
+
                 return true;
             }
+
             return false;
         }
 
@@ -216,36 +216,22 @@ namespace IronyModManager.Services
         /// <summary>
         /// Class DLCCacheHolder.
         /// </summary>
-        public class DLCCacheHolder
+        /// <remarks>Initializes a new instance of the <see cref="DLCCacheHolder" /> class.</remarks>
+        public class DLCCacheHolder(List<IDLC> dlc, string gameExe)
         {
-            #region Constructors
-
-            /// <summary>
-            /// Initializes a new instance of the <see cref="DLCCacheHolder" /> class.
-            /// </summary>
-            /// <param name="dlc">The DLC.</param>
-            /// <param name="gameExe">The game executable.</param>
-            public DLCCacheHolder(List<IDLC> dlc, string gameExe)
-            {
-                DLC = dlc;
-                GameExe = gameExe ?? string.Empty;
-            }
-
-            #endregion Constructors
-
             #region Properties
 
             /// <summary>
             /// Gets or sets the DLC.
             /// </summary>
             /// <value>The DLC.</value>
-            public List<IDLC> DLC { get; set; }
+            public List<IDLC> DLC { get; set; } = dlc;
 
             /// <summary>
             /// Gets or sets the game executable.
             /// </summary>
             /// <value>The game executable.</value>
-            public string GameExe { get; set; }
+            public string GameExe { get; set; } = gameExe ?? string.Empty;
 
             #endregion Properties
         }
